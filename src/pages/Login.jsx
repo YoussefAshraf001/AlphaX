@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { UserAuth } from "../context/AuthContext";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
@@ -13,9 +13,22 @@ import {
 import { auth } from "../firebase";
 
 const Login = () => {
-  const { logIn } = UserAuth();
+  const { logIn, user, loading: authLoading } = UserAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const hasRedirectedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasRedirectedRef.current) return;
+    if (authLoading) return;
+
+    const effectiveUser = user || auth.currentUser;
+    if (!effectiveUser) return;
+
+    hasRedirectedRef.current = true;
+    const fromPath = location.state?.from;
+    navigate(fromPath || "/profiles", { replace: true });
+  }, [authLoading, location.state?.from, navigate, user]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +39,7 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
     try {
@@ -35,6 +49,7 @@ const Login = () => {
       );
 
       await logIn(email, password);
+      hasRedirectedRef.current = true;
       const fromPath = location.state?.from;
       navigate(fromPath || "/profiles", { replace: true });
       toast.success("Welcome back 👋");
@@ -193,4 +208,3 @@ const Login = () => {
 };
 
 export default Login;
-

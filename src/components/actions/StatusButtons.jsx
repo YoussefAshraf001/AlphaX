@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { UserAuth } from "../../context/AuthContext";
@@ -42,12 +42,13 @@ const StatusButtons = ({ item }) => {
   const typeDoc = isTV ? "shows" : "movies";
   const activeProfileId = resolveProfileId(selectedProfile);
 
-  const ref =
-    user?.email &&
-    doc(
+  const ref = useMemo(() => {
+    if (!user?.email || !item?.id) return null;
+    return doc(
       db,
       ...profileSavedItemPath(user.email, activeProfileId, typeDoc, item.id),
     );
+  }, [activeProfileId, item?.id, typeDoc, user?.email]);
 
   /* ---------------- FETCH CURRENT STATUS ---------------- */
   useEffect(() => {
@@ -75,11 +76,11 @@ const StatusButtons = ({ item }) => {
     };
 
     fetchStatus();
-  }, [item?.id, user?.email, ref]);
+  }, [ref]);
 
   /* ---------------- SET STATUS ---------------- */
   const setStatus = async (status) => {
-    if (!user?.email) {
+    if (!user?.email || !ref) {
       toast.error("Login required");
       return;
     }

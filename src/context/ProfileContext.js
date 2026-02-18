@@ -17,7 +17,7 @@ import {
   setDoc,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 import { UserAuth } from "./AuthContext";
 import {
   legacyRatingsCollectionPath,
@@ -224,14 +224,17 @@ export const ProfileContextProvider = ({ children }) => {
   }, [user, loading, migrateMainLikedActorsIfNeeded, migrateMainRatingsIfNeeded]);
 
   const selectProfile = useCallback((profile) => {
-    if (!user?.email || !profile) return;
-    localStorage.setItem(getSelectedKey(user.email), profile.id);
+    const email = user?.email || auth.currentUser?.email;
+    if (!email || !profile) return false;
+    localStorage.setItem(getSelectedKey(email), profile.id);
     setSelectedProfile(profile);
+    return true;
   }, [user?.email]);
 
   const clearSelectedProfile = useCallback(() => {
-    if (!user?.email) return;
-    localStorage.removeItem(getSelectedKey(user.email));
+    const email = user?.email || auth.currentUser?.email;
+    if (!email) return;
+    localStorage.removeItem(getSelectedKey(email));
     setSelectedProfile(null);
   }, [user?.email]);
 

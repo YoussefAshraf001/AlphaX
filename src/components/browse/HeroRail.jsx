@@ -327,42 +327,40 @@ const HeroRail = ({ poolEndpoint }) => {
           </div>
         </div>
 
-        {isPlaying && (
-          <div className="hidden lg:flex absolute right-6 xl:right-8 top-1/2 -translate-y-1/2 flex-col gap-3 xl:gap-4 z-10">
-            {rightRail.map((entry) => {
-              const preview = entry.item;
-              if (!preview) return null;
+        <div className="hidden lg:flex absolute right-6 xl:right-8 top-1/2 -translate-y-1/2 flex-col gap-3 xl:gap-4 z-10">
+          {rightRail.map((entry) => {
+            const preview = entry.item;
+            if (!preview) return null;
 
-              return (
-                <button
-                  key={`${preview.id}-${entry.idx}`}
-                  onClick={() => setIndex(entry.idx)}
-                  className="relative w-[250px] xl:w-[280px] h-[104px] xl:h-[120px] rounded-lg overflow-hidden group border border-white/10"
-                >
-                  {preview.backdrop_path ? (
-                    <img
-                      src={`https://image.tmdb.org/t/p/original/${preview.backdrop_path}`}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                      alt=""
-                    />
-                  ) : (
-                    <div className="absolute inset-0 bg-neutral-800" />
-                  )}
-                  <div className="absolute inset-0 bg-black/50" />
-                  <div className="absolute bottom-3 left-4 text-left">
-                    <p className="text-sm font-semibold line-clamp-1">
-                      {preview.title || preview.name}
-                    </p>
-                    <p className="text-xs text-neutral-300">
-                      {preview.release_date?.slice(0, 4) ||
-                        preview.first_air_date?.slice(0, 4)}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+            return (
+              <button
+                key={`${preview.id}-${entry.idx}`}
+                onClick={() => setIndex(entry.idx)}
+                className="relative w-[250px] xl:w-[280px] h-[104px] xl:h-[120px] rounded-lg overflow-hidden group border border-white/10"
+              >
+                {preview.backdrop_path ? (
+                  <img
+                    src={`https://image.tmdb.org/t/p/original/${preview.backdrop_path}`}
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    alt=""
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-neutral-800" />
+                )}
+                <div className="absolute inset-0 bg-black/50" />
+                <div className="absolute bottom-3 left-4 text-left">
+                  <p className="text-sm font-semibold line-clamp-1">
+                    {preview.title || preview.name}
+                  </p>
+                  <p className="text-xs text-neutral-300">
+                    {preview.release_date?.slice(0, 4) ||
+                      preview.first_air_date?.slice(0, 4)}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

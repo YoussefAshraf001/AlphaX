@@ -38,6 +38,7 @@ export function AuthContextProvider({ children }) {
   const [error, setError] = useState(null); // Track error state
 
   const signUp = async (username, email, password) => {
+    setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
 
@@ -52,28 +53,37 @@ export function AuthContextProvider({ children }) {
       const errorMessage = mapErrorToMessage(err.code);
       setError(errorMessage);
       throw new Error(errorMessage); // <-- IMPORTANT
+    } finally {
+      setLoading(false);
     }
   };
 
   const logIn = async (email, password) => {
+    setLoading(true);
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
       setUser(credential.user);
       setError("");
+      return credential.user;
     } catch (err) {
       const errorMessage = mapErrorToMessage(err.code);
       setError(errorMessage);
       throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
   const logOut = async () => {
+    setLoading(true);
     try {
       await signOut(auth);
     } catch (err) {
       const errorMessage = mapErrorToMessage(err.code);
       setError(errorMessage);
       throw new Error(errorMessage); // <-- keep it consistent
+    } finally {
+      setLoading(false);
     }
   };
 

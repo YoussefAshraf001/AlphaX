@@ -104,8 +104,16 @@ const WhoIsWatching = () => {
       return;
     }
 
-    setPendingProfileSelection({ profileId: profile.id, destination: returnPath });
-    selectProfile(profile);
+    const didSelect = selectProfile(profile);
+    if (didSelect) {
+      navigate(returnPath, { replace: true });
+      return;
+    }
+
+    setPendingProfileSelection({
+      profileId: profile.id,
+      destination: returnPath,
+    });
   };
 
   const closeEditor = () => {
@@ -239,11 +247,16 @@ const WhoIsWatching = () => {
       return;
     }
 
+    const didSelect = selectProfile(pinTarget);
+    if (didSelect) {
+      navigate(returnPath, { replace: true });
+      return;
+    }
+
     setPendingProfileSelection({
       profileId: pinTarget.id,
       destination: returnPath,
     });
-    selectProfile(pinTarget);
   };
 
   const handlePinDigitChange = (index, rawValue) => {
