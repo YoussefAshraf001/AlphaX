@@ -21,7 +21,7 @@ import { IoIosClose, IoIosPause } from "react-icons/io";
 import { MdDoneOutline } from "react-icons/md";
 import { FaTrash } from "react-icons/fa";
 import { ImSpinner2 } from "react-icons/im";
-import { FiLink2, FiRefreshCw, FiUpload } from "react-icons/fi";
+import { FiImage, FiRefreshCw } from "react-icons/fi";
 import { UserAuth } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
 import PersonalRating from "../components/actions/PersonalRating";
@@ -46,7 +46,13 @@ const STATUSES = [
   { key: "Dropped", icon: <IoIosClose size={18} /> },
 ];
 
-const EMOJI_SCALE = ["\uD83D\uDE21", "\uD83D\uDE15", "\uD83D\uDE10", "\uD83D\uDE42", "\uD83D\uDE0D"];
+const EMOJI_SCALE = [
+  "\uD83D\uDE21",
+  "\uD83D\uDE15",
+  "\uD83D\uDE10",
+  "\uD83D\uDE42",
+  "\uD83D\uDE0D",
+];
 
 /* =========================
    MOTION PRESETS
@@ -168,7 +174,9 @@ const SidePanel = ({
                   const actorRating = actorRatingsById?.[String(actor.id)];
                   const actorRatingValue = Number(actorRating?.value || 0);
                   const actorRatingLabel =
-                    actorRatingValue > 0 ? EMOJI_SCALE[actorRatingValue - 1] : "--";
+                    actorRatingValue > 0
+                      ? EMOJI_SCALE[actorRatingValue - 1]
+                      : "--";
                   return (
                     <div className="relative w-12 h-7 shrink-0">
                       <span
@@ -204,81 +212,87 @@ const SidePanel = ({
               </div>
             ))
           ) : (
-            <p className="text-xs text-white/40 px-2">No favourite actors yet.</p>
+            <p className="text-xs text-white/40 px-2">
+              No favourite actors yet.
+            </p>
           )}
         </div>
       </section>
 
       <section className="h-[295px] max-h-[295px] border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
-      <h3 className="text-xs uppercase text-white/40 mb-3">Favourite Movies</h3>
-      <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
-        {movies.length ? (
-          movies.map((item) => (
-            <button
-              key={`movie-${item.id}`}
-              onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  onOpenPath(e, `/movies/${item.id}`);
-                }
-              }}
-              className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
-            >
-              {item.poster ? (
-                <img
-                  src={`https://image.tmdb.org/t/p/w92${item.poster}`}
-                  alt=""
-                  className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
-                />
-              ) : (
-                <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-white/85 truncate">{item.title}</p>
-              </div>
-            </button>
-          ))
-        ) : (
-          <p className="text-xs text-white/40 px-2">No movies saved yet.</p>
-        )}
-      </div>
-    </section>
+        <h3 className="text-xs uppercase text-white/40 mb-3">
+          Favourite Movies
+        </h3>
+        <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
+          {movies.length ? (
+            movies.map((item) => (
+              <button
+                key={`movie-${item.id}`}
+                onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
+                onAuxClick={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    onOpenPath(e, `/movies/${item.id}`);
+                  }
+                }}
+                className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
+              >
+                {item.poster ? (
+                  <img
+                    src={`https://image.tmdb.org/t/p/w92${item.poster}`}
+                    alt=""
+                    className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
+                  />
+                ) : (
+                  <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-white/85 truncate">{item.title}</p>
+                </div>
+              </button>
+            ))
+          ) : (
+            <p className="text-xs text-white/40 px-2">No movies saved yet.</p>
+          )}
+        </div>
+      </section>
 
       <section className="h-[294px] max-h-[294px] border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
-      <h3 className="text-xs uppercase text-white/40 mb-3">Favourite Shows</h3>
-      <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
-        {shows.length ? (
-          shows.map((item) => (
-            <button
-              key={`tv-${item.id}`}
-              onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  onOpenPath(e, `/shows/${item.id}`);
-                }
-              }}
-              className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
-            >
-              {item.poster ? (
-                <img
-                  src={`https://image.tmdb.org/t/p/w92${item.poster}`}
-                  alt=""
-                  className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
-                />
-              ) : (
-                <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-white/85 truncate">{item.title}</p>
-              </div>
-            </button>
-          ))
-        ) : (
-          <p className="text-xs text-white/40 px-2">No shows saved yet.</p>
-        )}
-      </div>
+        <h3 className="text-xs uppercase text-white/40 mb-3">
+          Favourite Shows
+        </h3>
+        <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
+          {shows.length ? (
+            shows.map((item) => (
+              <button
+                key={`tv-${item.id}`}
+                onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
+                onAuxClick={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    onOpenPath(e, `/shows/${item.id}`);
+                  }
+                }}
+                className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
+              >
+                {item.poster ? (
+                  <img
+                    src={`https://image.tmdb.org/t/p/w92${item.poster}`}
+                    alt=""
+                    className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
+                  />
+                ) : (
+                  <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-white/85 truncate">{item.title}</p>
+                </div>
+              </button>
+            ))
+          ) : (
+            <p className="text-xs text-white/40 px-2">No shows saved yet.</p>
+          )}
+        </div>
       </section>
     </motion.aside>
   );
@@ -460,18 +474,28 @@ const QuickRateModal = ({
   );
 };
 
-const ActorImageLinkModal = ({
+const ActorImageSourceModal = ({
   open,
   actor,
-  value,
-  isValid,
+  mode,
+  onModeChange,
+  linkValue,
+  linkValid,
   previewError,
+  uploadPreview,
   saving,
-  onChange,
+  onLinkChange,
+  onUploadPick,
   onPreviewError,
   onClose,
   onSave,
 }) => {
+  const previewSrc = mode === "upload" ? uploadPreview : linkValue.trim();
+  const canPreview =
+    mode === "upload"
+      ? Boolean(uploadPreview)
+      : Boolean(linkValue.trim() && linkValid);
+
   return (
     <AnimatePresence>
       {open && actor && (
@@ -479,7 +503,7 @@ const ActorImageLinkModal = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
           onClick={onClose}
         >
           <motion.div
@@ -487,40 +511,28 @@ const ActorImageLinkModal = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#111] p-5 md:p-6"
+            className="w-full max-w-2xl rounded-2xl bg-gradient-to-b from-[#191919] to-[#101010] p-6 md:p-7 shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 mb-5">
+            <div className="flex items-start gap-4 mb-6 pb-4 border-b border-white/10">
               <div className="min-w-0">
-                <p className="text-xs uppercase tracking-wider text-white/50">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-white/55">
                   Custom Actor Image
                 </p>
                 <h3 className="text-lg font-semibold text-white truncate">
                   {actor.name}
                 </h3>
               </div>
-              <button
-                onClick={onClose}
-                disabled={saving}
-                className="px-3 py-1.5 text-xs rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Close
-              </button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-[12rem_1fr]">
-              <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/45 mb-2">Preview</p>
-                <div className="w-40 mx-auto aspect-[2/3] rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
-                  {!value.trim() || !isValid || previewError ? (
-                    <span className="text-xs text-white/45 px-4 text-center">
-                      {previewError
-                        ? "Could not load preview for this URL."
-                        : "Paste a valid image URL to preview."}
-                    </span>
+            <div className="grid gap-6 md:grid-cols-[12rem_1fr]">
+              <div className="rounded-xl bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_45%),linear-gradient(to_bottom,rgba(255,255,255,0.04),rgba(0,0,0,0.2))]">
+                <div className="w-full aspect-[2/3] rounded-lg overflow-hidden bg-black/35 shadow-[0_14px_35px_rgba(0,0,0,0.5)] flex items-center justify-center">
+                  {!canPreview || previewError ? (
+                    <span className="text-xs text-white/45">Preview</span>
                   ) : (
                     <img
-                      src={value.trim()}
+                      src={previewSrc}
                       alt=""
                       className="w-full h-full object-cover"
                       onError={onPreviewError}
@@ -529,47 +541,96 @@ const ActorImageLinkModal = ({
                 </div>
               </div>
 
-              <div className="min-w-0 flex flex-col">
-                <label className="block text-xs text-white/60 mb-2">Image URL</label>
-                <input
-                  type="url"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                  placeholder="https://example.com/actor.jpg"
-                  className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-white/35"
-                  autoFocus
-                  disabled={saving}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && isValid && !saving) {
-                      onSave();
-                    }
-                  }}
-                />
-                {value.trim().length > 0 && !isValid && (
-                  <p className="mt-2 text-xs text-red-300">
-                    Enter a valid `http` or `https` image URL.
-                  </p>
-                )}
-                <p className="mt-3 text-xs text-white/45">
-                  Tip: use direct image links (`.jpg`, `.png`, `.webp`) for reliable previews.
-                </p>
-                <div className="mt-5 flex justify-end gap-2">
+              <div className="min-w-0 flex flex-col rounded-xl border border-white/10 bg-black/25 p-4">
+                <div className="flex items-center gap-2 mb-4">
                   <button
-                    onClick={onClose}
+                    onClick={() => onModeChange("upload")}
                     disabled={saving}
-                    className="px-4 py-2 text-sm rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`px-3.5 py-2 rounded-md text-xs border transition ${
+                      mode === "upload"
+                        ? "bg-red-500/20 border-red-400/50 text-white"
+                        : "bg-white/5 border-white/10 text-white/45"
+                    }`}
                   >
-                    Cancel
+                    Upload
                   </button>
                   <button
-                    onClick={onSave}
-                    disabled={!isValid || saving}
-                    className="px-4 py-2 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => onModeChange("link")}
+                    disabled={saving}
+                    className={`px-3.5 py-2 rounded-md text-xs border transition ${
+                      mode === "link"
+                        ? "bg-red-500/20 border-red-400/50 text-white"
+                        : "bg-white/5 border-white/10 text-white/45"
+                    }`}
                   >
-                    {saving ? "Saving..." : "Save Image"}
+                    Image URL
                   </button>
                 </div>
+                {mode === "upload" ? (
+                  <div className="space-y-3">
+                    <label className="block text-xs text-white/60">
+                      Upload Image
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={saving}
+                      onChange={onUploadPick}
+                      className="block w-full text-xs text-white/70 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-white hover:file:bg-zinc-700"
+                    />
+                    <p className="text-xs text-white/45">
+                      Pick an image file to apply as the custom actor image.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <label className="block text-xs text-white/60">
+                      Image URL
+                    </label>
+                    <input
+                      type="url"
+                      value={linkValue}
+                      onChange={(e) => onLinkChange(e.target.value)}
+                      placeholder="https://example.com/actor.jpg"
+                      className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-white/35"
+                      autoFocus
+                      disabled={saving}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && linkValid && !saving) {
+                          onSave();
+                        }
+                      }}
+                    />
+                    {linkValue.trim().length > 0 && !linkValid && (
+                      <p className="text-xs text-red-300">
+                        Enter a valid `http` or `https` image URL.
+                      </p>
+                    )}
+                    <p className="text-xs text-white/45">
+                      Tip: use direct image links (`.jpg`, `.png`, `.webp`) for
+                      reliable previews.
+                    </p>
+                  </div>
+                )}
               </div>
+            </div>
+            <div className="mt-6 pt-4 border-t border-white/10 flex justify-end gap-2">
+              <button
+                onClick={onClose}
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded-md bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSave}
+                disabled={
+                  saving || (mode === "link" ? !linkValid : !uploadPreview)
+                }
+                className="px-4 py-2 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {saving ? "Saving..." : "Save Image"}
+              </button>
             </div>
           </motion.div>
         </motion.div>
@@ -589,7 +650,12 @@ const Toast = ({ message, onClose }) => (
     className="fixed top-20 left-1/2 -translate-x-1/2 z-[1200] bg-[#0d0d0d]/95 border border-red-600/80 text-white shadow-[0_10px_32px_rgba(0,0,0,0.65)] px-5 py-3 rounded-lg text-sm backdrop-blur-md"
   >
     {message}
-    <button onClick={onClose} className="ml-4 text-red-300/70 hover:text-red-200">x</button>
+    <button
+      onClick={onClose}
+      className="ml-4 text-red-300/70 hover:text-red-200"
+    >
+      x
+    </button>
   </motion.div>
 );
 
@@ -623,13 +689,15 @@ const Account = () => {
   const [refreshingItemKeys, setRefreshingItemKeys] = useState({});
   const [savingActorImageId, setSavingActorImageId] = useState(null);
   const [refreshingActorImageId, setRefreshingActorImageId] = useState(null);
-  const [actorImageTarget, setActorImageTarget] = useState(null);
-  const [actorImageLinkModal, setActorImageLinkModal] = useState({
+  const [actorImageModal, setActorImageModal] = useState({
     open: false,
     actor: null,
   });
+  const [actorImageMode, setActorImageMode] = useState("upload");
   const [actorImageLinkValue, setActorImageLinkValue] = useState("");
-  const [actorImageLinkPreviewError, setActorImageLinkPreviewError] = useState(false);
+  const [actorImageUploadPreview, setActorImageUploadPreview] = useState("");
+  const [actorImageLinkPreviewError, setActorImageLinkPreviewError] =
+    useState(false);
   const [wantWatchSections, setWantWatchSections] = useState({
     movieReleased: true,
     movieUnreleased: true,
@@ -637,7 +705,6 @@ const Account = () => {
     tvUnreleased: true,
   });
   const [toast, setToast] = useState(null);
-  const actorImageInputRef = useRef(null);
   const actorImageHydrationRef = useRef(new Set());
 
   const getActorImageSrc = (actor, size = "w185") => {
@@ -673,7 +740,11 @@ const Account = () => {
       setLoading(true);
       const moviesRef = collection(
         db,
-        ...profileSavedCollectionPath(nextUser.email, activeProfileId, "movies"),
+        ...profileSavedCollectionPath(
+          nextUser.email,
+          activeProfileId,
+          "movies",
+        ),
       );
       const tvRef = collection(
         db,
@@ -681,15 +752,27 @@ const Account = () => {
       );
       const movieRatingsRef = collection(
         db,
-        ...profileRatingsCollectionPath(nextUser.email, activeProfileId, "movies"),
+        ...profileRatingsCollectionPath(
+          nextUser.email,
+          activeProfileId,
+          "movies",
+        ),
       );
       const showRatingsRef = collection(
         db,
-        ...profileRatingsCollectionPath(nextUser.email, activeProfileId, "shows"),
+        ...profileRatingsCollectionPath(
+          nextUser.email,
+          activeProfileId,
+          "shows",
+        ),
       );
       const actorRatingsRef = collection(
         db,
-        ...profileRatingsCollectionPath(nextUser.email, activeProfileId, "actors"),
+        ...profileRatingsCollectionPath(
+          nextUser.email,
+          activeProfileId,
+          "actors",
+        ),
       );
       const actorsRef = collection(
         db,
@@ -847,7 +930,11 @@ const Account = () => {
     try {
       const ref = doc(
         db,
-        ...profileLikedActorItemPath(currentUser.email, activeProfileId, actor.id),
+        ...profileLikedActorItemPath(
+          currentUser.email,
+          activeProfileId,
+          actor.id,
+        ),
       );
       await deleteDoc(ref);
       setActors((prev) => prev.filter((a) => a.id !== actor.id));
@@ -896,17 +983,22 @@ const Account = () => {
     }
   };
 
-  const triggerActorImageUpload = (actor) => {
-    setActorImageTarget(actor);
-    if (actorImageInputRef.current) {
-      actorImageInputRef.current.value = "";
-      actorImageInputRef.current.click();
-    }
+  const openActorImageModal = (actor) => {
+    setActorImageModal({ open: true, actor });
+    setActorImageMode("upload");
+    setActorImageLinkValue("");
+    setActorImageUploadPreview("");
+    setActorImageLinkPreviewError(false);
   };
 
   const refreshActorImageFromSource = async (actor) => {
     const currentUser = auth.currentUser;
-    if (!currentUser?.email || !actor || refreshingActorImageId === Number(actor.id)) return;
+    if (
+      !currentUser?.email ||
+      !actor ||
+      refreshingActorImageId === Number(actor.id)
+    )
+      return;
     setRefreshingActorImageId(Number(actor.id));
     try {
       const response = await axios.get(
@@ -914,11 +1006,17 @@ const Account = () => {
         { params: { api_key: process.env.REACT_APP_TMDB_API_KEY } },
       );
       const data = response.data || {};
-      const isFavouriteActor = actors.some((a) => String(a.id) === String(actor.id));
+      const isFavouriteActor = actors.some(
+        (a) => String(a.id) === String(actor.id),
+      );
       if (isFavouriteActor) {
         const actorRef = doc(
           db,
-          ...profileLikedActorItemPath(currentUser.email, activeProfileId, actor.id),
+          ...profileLikedActorItemPath(
+            currentUser.email,
+            activeProfileId,
+            actor.id,
+          ),
         );
         await setDoc(
           actorRef,
@@ -946,7 +1044,12 @@ const Account = () => {
       } else {
         const ratingRef = doc(
           db,
-          ...profileRatingItemPath(currentUser.email, activeProfileId, "actors", actor.id),
+          ...profileRatingItemPath(
+            currentUser.email,
+            activeProfileId,
+            "actors",
+            actor.id,
+          ),
         );
         await setDoc(
           ratingRef,
@@ -966,7 +1069,10 @@ const Account = () => {
             ...(prev[String(actor.id)] || {}),
             id: Number(actor.id),
             title:
-              data.name || actor.name || prev[String(actor.id)]?.title || `Actor #${actor.id}`,
+              data.name ||
+              actor.name ||
+              prev[String(actor.id)]?.title ||
+              `Actor #${actor.id}`,
             image: data.profile_path ?? null,
           },
         }));
@@ -987,11 +1093,17 @@ const Account = () => {
     setSavingActorImageId(Number(actor.id));
     try {
       const cleanedImage = String(nextImage).trim();
-      const isFavouriteActor = actors.some((a) => String(a.id) === String(actor.id));
+      const isFavouriteActor = actors.some(
+        (a) => String(a.id) === String(actor.id),
+      );
       if (isFavouriteActor) {
         const actorRef = doc(
           db,
-          ...profileLikedActorItemPath(currentUser.email, activeProfileId, actor.id),
+          ...profileLikedActorItemPath(
+            currentUser.email,
+            activeProfileId,
+            actor.id,
+          ),
         );
         await setDoc(
           actorRef,
@@ -1006,13 +1118,20 @@ const Account = () => {
         );
         setActors((prev) =>
           prev.map((a) =>
-            String(a.id) === String(actor.id) ? { ...a, image: cleanedImage } : a,
+            String(a.id) === String(actor.id)
+              ? { ...a, image: cleanedImage }
+              : a,
           ),
         );
       } else {
         const ratingRef = doc(
           db,
-          ...profileRatingItemPath(currentUser.email, activeProfileId, "actors", actor.id),
+          ...profileRatingItemPath(
+            currentUser.email,
+            activeProfileId,
+            "actors",
+            actor.id,
+          ),
         );
         await setDoc(
           ratingRef,
@@ -1045,56 +1164,66 @@ const Account = () => {
     }
   };
 
-  const onActorImageFilePicked = async (event) => {
-    const file = event.target.files?.[0];
-    const target = actorImageTarget;
-    if (!file || !target) return;
-    if (!String(file.type || "").startsWith("image/")) {
-      setToast("Please pick an image file");
-      setTimeout(() => setToast(null), 2500);
+  const closeActorImageModal = () => {
+    const actorId = Number(actorImageModal.actor?.id);
+    if (
+      savingActorImageId != null &&
+      actorId > 0 &&
+      savingActorImageId === actorId
+    )
       return;
-    }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (!result) return;
-      await saveActorImage(target, result);
-    };
-    reader.onerror = () => {
-      setToast("Failed to read image");
-      setTimeout(() => setToast(null), 2500);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const setActorImageFromLink = (actor) => {
-    setActorImageLinkModal({ open: true, actor });
+    setActorImageModal({ open: false, actor: null });
+    setActorImageMode("upload");
     setActorImageLinkValue("");
-    setActorImageLinkPreviewError(false);
-  };
-
-  const closeActorImageLinkModal = () => {
-    const actorId = Number(actorImageLinkModal.actor?.id);
-    if (savingActorImageId != null && actorId > 0 && savingActorImageId === actorId) return;
-    setActorImageLinkModal({ open: false, actor: null });
-    setActorImageLinkValue("");
+    setActorImageUploadPreview("");
     setActorImageLinkPreviewError(false);
   };
 
   const actorImageLinkCleaned = actorImageLinkValue.trim();
   const actorImageLinkValid = /^https?:\/\/\S+$/i.test(actorImageLinkCleaned);
 
+  const onActorImageUploadPicked = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!String(file.type || "").startsWith("image/")) {
+      setToast("Please pick an image file");
+      setTimeout(() => setToast(null), 2500);
+      setActorImageUploadPreview("");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      setActorImageUploadPreview(result);
+      setActorImageLinkPreviewError(false);
+    };
+    reader.onerror = () => {
+      setToast("Failed to read image");
+      setTimeout(() => setToast(null), 2500);
+      setActorImageUploadPreview("");
+    };
+    reader.readAsDataURL(file);
+  };
+
   const saveActorImageFromModal = async () => {
-    const actor = actorImageLinkModal.actor;
-    if (!actor || !actorImageLinkValid) return;
-    const saved = await saveActorImage(actor, actorImageLinkCleaned);
+    const actor = actorImageModal.actor;
+    if (!actor) return;
+    const source =
+      actorImageMode === "link"
+        ? actorImageLinkCleaned
+        : String(actorImageUploadPreview || "");
+    if (!source || (actorImageMode === "link" && !actorImageLinkValid)) return;
+    const saved = await saveActorImage(actor, source);
     if (saved) {
-      closeActorImageLinkModal();
+      closeActorImageModal();
     }
   };
 
   const openQuickRate = (item) => {
-    const currentValue = Math.max(0, Math.min(5, Number(item.userRatingValue) || 0));
+    const currentValue = Math.max(
+      0,
+      Math.min(5, Number(item.userRatingValue) || 0),
+    );
     setQuickRate({
       item,
       value: currentValue,
@@ -1119,7 +1248,12 @@ const Account = () => {
     const typeDoc = item.mediaType === "tv" ? "shows" : "movies";
     const ratingRef = doc(
       db,
-      ...profileRatingItemPath(currentUser.email, activeProfileId, typeDoc, item.id),
+      ...profileRatingItemPath(
+        currentUser.email,
+        activeProfileId,
+        typeDoc,
+        item.id,
+      ),
     );
 
     try {
@@ -1170,7 +1304,8 @@ const Account = () => {
     if (refreshingItemKeys[refreshKey]) return;
 
     const isValidItem =
-      Number(item?.id) > 0 && (item.mediaType === "movie" || item.mediaType === "tv");
+      Number(item?.id) > 0 &&
+      (item.mediaType === "movie" || item.mediaType === "tv");
     if (!isValidItem) {
       setToast("Nothing to refresh");
       setTimeout(() => setToast(null), 2500);
@@ -1345,7 +1480,9 @@ const Account = () => {
       .filter(([, rating]) => Number(rating?.value || 0) > 0)
       .map(([id, rating]) => ({ id, rating }))
       .filter(({ id, rating }) => {
-        const isFavouriteActor = actors.some((a) => String(a.id) === String(id));
+        const isFavouriteActor = actors.some(
+          (a) => String(a.id) === String(id),
+        );
         if (isFavouriteActor) return false;
         return !String(rating?.image || "").trim();
       })
@@ -1357,9 +1494,12 @@ const Account = () => {
       if (actorImageHydrationRef.current.has(key)) return;
       actorImageHydrationRef.current.add(key);
       try {
-        const response = await axios.get(`https://api.themoviedb.org/3/person/${id}`, {
-          params: { api_key: process.env.REACT_APP_TMDB_API_KEY },
-        });
+        const response = await axios.get(
+          `https://api.themoviedb.org/3/person/${id}`,
+          {
+            params: { api_key: process.env.REACT_APP_TMDB_API_KEY },
+          },
+        );
         const data = response.data || {};
         const ratingRef = doc(
           db,
@@ -1369,7 +1509,8 @@ const Account = () => {
           ratingRef,
           {
             id,
-            title: data.name || actorRatingsById?.[key]?.title || `Actor #${id}`,
+            title:
+              data.name || actorRatingsById?.[key]?.title || `Actor #${id}`,
             image: data.profile_path ?? null,
             mediaType: "person",
             mode: "emoji",
@@ -1399,7 +1540,7 @@ const Account = () => {
           variants={slideUp}
           whileHover={{ y: -4 }}
           layout
-          className="bg-[#111] rounded-lg overflow-hidden relative"
+          className="group bg-[#111] rounded-lg overflow-hidden relative"
         >
           {(() => {
             const totalEpisodes = Number(item.totalEpisodes || 0);
@@ -1434,18 +1575,16 @@ const Account = () => {
                       : null;
             const userRatingValue = Number(item.userRatingValue || 0);
             const unreleasedItem = isUnreleasedItem(item);
-            const userRatingLabel =
-              unreleasedItem
-                ? "Rating opens on release"
-                : userRatingValue > 0
+            const userRatingLabel = unreleasedItem
+              ? "Rating opens on release"
+              : userRatingValue > 0
                 ? `${"★".repeat(userRatingValue)}${"☆".repeat(
                     5 - userRatingValue,
                   )}`
                 : "Not rated";
-            const ratingButtonLabel =
-              unreleasedItem
-                ? userRatingLabel
-                : userRatingValue > 0
+            const ratingButtonLabel = unreleasedItem
+              ? userRatingLabel
+              : userRatingValue > 0
                 ? userRatingLabel
                 : "Click to rate";
             const refreshKey = `${item.mediaType}-${item.id}`;
@@ -1455,7 +1594,7 @@ const Account = () => {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={() => setRemoveConfirm(item)}
-                  className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-black/60 hover:bg-red-600/80"
+                  className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-black/60 hover:bg-red-600/80 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200"
                   title="Remove from list"
                 >
                   <FaTrash size={12} />
@@ -1463,12 +1602,12 @@ const Account = () => {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={() => toggleFavourite(item)}
-                  className={`absolute top-2 left-2 z-10 w-7 h-7 rounded-full flex items-center justify-center ${
+                  className={`absolute top-2 left-2 z-10 w-7 h-7 rounded-full flex items-center justify-center opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 ${
                     unreleasedItem
                       ? "bg-black/40 text-white/40 cursor-not-allowed"
                       : item.favourite
-                      ? "bg-red-600/90"
-                      : "bg-black/60 hover:bg-black/80"
+                        ? "bg-red-600/90"
+                        : "bg-black/60 hover:bg-black/80"
                   }`}
                   title={
                     unreleasedItem
@@ -1488,7 +1627,7 @@ const Account = () => {
                   whileTap={{ scale: 0.9 }}
                   onClick={() => refreshSavedMetadata(item)}
                   disabled={itemRefreshing}
-                  className={`absolute top-2 left-[2.55rem] z-10 w-7 h-7 rounded-full flex items-center justify-center ${
+                  className={`absolute top-2 left-[2.55rem] z-10 w-7 h-7 rounded-full flex items-center justify-center opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 ${
                     itemRefreshing
                       ? "bg-black/50 text-white/70 cursor-not-allowed"
                       : "bg-black/60 hover:bg-black/80"
@@ -1611,14 +1750,17 @@ const Account = () => {
     </motion.div>
   );
 
-  const renderActorGrid = (list, { showRemove = false, showRating = false } = {}) => (
+  const renderActorGrid = (
+    list,
+    { showRemove = false, showRating = false } = {},
+  ) => (
     <motion.div
       variants={gridStagger}
       initial="hidden"
       animate="show"
       className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-4"
     >
-      {list.map((actor) => (
+      {list.map((actor) =>
         (() => {
           const actorImageSrc = getActorImageSrc(actor, "w342");
           const actorRatingValue = Number(
@@ -1627,110 +1769,115 @@ const Account = () => {
           const actorReaction =
             actorRatingValue > 0 ? EMOJI_SCALE[actorRatingValue - 1] : "--";
           return (
-        <motion.div
-          key={`actor-${actor.id}`}
-          variants={slideUp}
-          whileHover={{ y: -4 }}
-          className="bg-[#111] rounded-lg overflow-hidden relative"
-        >
-          <div className="absolute top-2 left-2 z-10 flex items-center gap-1">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => triggerActorImageUpload(actor)}
-              disabled={savingActorImageId === Number(actor.id) || refreshingActorImageId === Number(actor.id)}
-              className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                savingActorImageId === Number(actor.id) || refreshingActorImageId === Number(actor.id)
-                  ? "bg-black/45 text-white/45 cursor-not-allowed"
-                  : "bg-black/60 hover:bg-black/80"
-              }`}
-              title="Upload custom actor image"
+            <motion.div
+              key={`actor-${actor.id}`}
+              variants={slideUp}
+              whileHover={{ y: -4 }}
+              className="group bg-[#111] rounded-lg overflow-hidden relative"
             >
-              {savingActorImageId === Number(actor.id) ? (
-                <ImSpinner2 className="animate-spin" size={12} />
-              ) : (
-                <FiUpload size={12} />
+              <div className="absolute top-2 left-2 z-10 flex items-center gap-1">
+                <div className="relative">
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => openActorImageModal(actor)}
+                    disabled={
+                      savingActorImageId === Number(actor.id) ||
+                      refreshingActorImageId === Number(actor.id)
+                    }
+                    className={`group/btn h-7 min-w-[1.75rem] px-2 rounded-full flex items-center justify-center overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-all duration-200 ${
+                      savingActorImageId === Number(actor.id) ||
+                      refreshingActorImageId === Number(actor.id)
+                        ? "bg-black/45 text-white/45 cursor-not-allowed"
+                        : "bg-black/60 hover:bg-black/80"
+                    }`}
+                    title="Custom Image"
+                    aria-label={`Set custom image for ${actor.name}`}
+                  >
+                    {savingActorImageId === Number(actor.id) ? (
+                      <ImSpinner2 className="animate-spin" size={12} />
+                    ) : (
+                      <FiImage size={12} />
+                    )}
+                    <span className="max-w-0 opacity-0 whitespace-nowrap text-[10px] text-white/90 ml-0 group-hover/btn:max-w-[84px] group-hover/btn:opacity-100 group-hover/btn:ml-1 transition-all duration-200">
+                      Custom Image
+                    </span>
+                  </motion.button>
+                </div>
+                <div className="relative">
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => refreshActorImageFromSource(actor)}
+                    disabled={
+                      savingActorImageId === Number(actor.id) ||
+                      refreshingActorImageId === Number(actor.id)
+                    }
+                    className={`group/btn h-7 min-w-[1.75rem] px-2 rounded-full flex items-center justify-center overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-all duration-200 ${
+                      savingActorImageId === Number(actor.id) ||
+                      refreshingActorImageId === Number(actor.id)
+                        ? "bg-black/45 text-white/45 cursor-not-allowed"
+                        : "bg-black/60 hover:bg-black/80"
+                    }`}
+                    title="Refresh"
+                  >
+                    {refreshingActorImageId === Number(actor.id) ? (
+                      <ImSpinner2 className="animate-spin" size={12} />
+                    ) : (
+                      <FiRefreshCw size={12} />
+                    )}
+                    <span className="max-w-0 opacity-0 whitespace-nowrap text-[10px] text-white/90 ml-0 group-hover/btn:max-w-[52px] group-hover/btn:opacity-100 group-hover/btn:ml-1 transition-all duration-200">
+                      Refresh
+                    </span>
+                  </motion.button>
+                </div>
+              </div>
+              {showRemove && (
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => removeActor(actor)}
+                  className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-black/60 hover:bg-red-600/80 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200"
+                  title="Remove actor"
+                >
+                  <FaTrash size={12} />
+                </motion.button>
               )}
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setActorImageFromLink(actor)}
-              disabled={savingActorImageId === Number(actor.id) || refreshingActorImageId === Number(actor.id)}
-              className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                savingActorImageId === Number(actor.id) || refreshingActorImageId === Number(actor.id)
-                  ? "bg-black/45 text-white/45 cursor-not-allowed"
-                  : "bg-black/60 hover:bg-black/80"
-              }`}
-              title="Set custom actor image from link"
-            >
-              <FiLink2 size={12} />
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => refreshActorImageFromSource(actor)}
-              disabled={
-                savingActorImageId === Number(actor.id) ||
-                refreshingActorImageId === Number(actor.id)
-              }
-              className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                savingActorImageId === Number(actor.id) ||
-                refreshingActorImageId === Number(actor.id)
-                  ? "bg-black/45 text-white/45 cursor-not-allowed"
-                  : "bg-black/60 hover:bg-black/80"
-              }`}
-              title="Refresh actor image from TMDB"
-            >
-              {refreshingActorImageId === Number(actor.id) ? (
-                <ImSpinner2 className="animate-spin" size={12} />
-              ) : (
-                <FiRefreshCw size={12} />
-              )}
-            </motion.button>
-          </div>
-          {showRemove && (
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => removeActor(actor)}
-              className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-black/60 hover:bg-red-600/80"
-              title="Remove actor"
-            >
-              <FaTrash size={12} />
-            </motion.button>
-          )}
-          <img
-            src={actorImageSrc || "https://placehold.co/300x450/111111/ffffff?text=Actor"}
-            alt=""
-            className="w-full aspect-[2/3] object-cover cursor-pointer"
-            onClick={(e) => openPath(e, `/person/${actor.id}`)}
-            onAuxClick={(e) => {
-              if (e.button === 1) {
-                e.preventDefault();
-                openPath(e, `/person/${actor.id}`);
-              }
-            }}
-          />
-          <div className="p-3 min-h-[70px]">
-            <button
-              onClick={(e) => openPath(e, `/person/${actor.id}`)}
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  openPath(e, `/person/${actor.id}`);
+              <img
+                src={
+                  actorImageSrc ||
+                  "https://placehold.co/300x450/111111/ffffff?text=Actor"
                 }
-              }}
-              className="text-sm font-medium truncate w-full text-left hover:text-red-400"
-            >
-              {actor.name}
-            </button>
-            {showRating && (
-              <p className="text-xs text-white/70 mt-1">
-                Reaction: {actorReaction}
-              </p>
-            )}
-          </div>
-        </motion.div>
+                alt=""
+                className="w-full aspect-[2/3] object-cover cursor-pointer"
+                onClick={(e) => openPath(e, `/person/${actor.id}`)}
+                onAuxClick={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    openPath(e, `/person/${actor.id}`);
+                  }
+                }}
+              />
+              <div className="p-3 min-h-[70px]">
+                <button
+                  onClick={(e) => openPath(e, `/person/${actor.id}`)}
+                  onAuxClick={(e) => {
+                    if (e.button === 1) {
+                      e.preventDefault();
+                      openPath(e, `/person/${actor.id}`);
+                    }
+                  }}
+                  className="text-sm font-medium truncate w-full text-left hover:text-red-400"
+                >
+                  {actor.name}
+                </button>
+                {showRating && (
+                  <p className="text-xs text-white/70 mt-1">
+                    Reaction: {actorReaction}
+                  </p>
+                )}
+              </div>
+            </motion.div>
           );
-        })()
-      ))}
+        })(),
+      )}
     </motion.div>
   );
 
@@ -1786,58 +1933,58 @@ const Account = () => {
         {/* STATUS FILTER */}
         {mediaFilter !== "actors" && (
           <div className="flex items-center justify-center px-6 py-3 border-b border-white/10 gap-2 overflow-x-auto">
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setStatusFilter("all")}
-            className={`px-3 py-1.5 rounded-full text-sm ${
-              statusFilter === "all"
-                ? "bg-white text-black"
-                : "bg-white/5 hover:bg-white/10"
-            }`}
-          >
-            All
-          </motion.button>
-
-          {STATUSES.map((s) => (
             <motion.button
               whileTap={{ scale: 0.95 }}
-              key={s.key}
-              onClick={() => setStatusFilter(s.key)}
-              className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-2 ${
-                statusFilter === s.key
+              onClick={() => setStatusFilter("all")}
+              className={`px-3 py-1.5 rounded-full text-sm ${
+                statusFilter === "all"
                   ? "bg-white text-black"
                   : "bg-white/5 hover:bg-white/10"
               }`}
             >
-              {s.icon}
-              {s.key}
+              All
             </motion.button>
-          ))}
 
-          <span className="h-4 w-px bg-white/20 mx-1" />
-          <span className="text-xs uppercase tracking-wide text-white/45">
-            Sort
-          </span>
+            {STATUSES.map((s) => (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                key={s.key}
+                onClick={() => setStatusFilter(s.key)}
+                className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-2 ${
+                  statusFilter === s.key
+                    ? "bg-white text-black"
+                    : "bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                {s.icon}
+                {s.key}
+              </motion.button>
+            ))}
 
-          {[ 
-            { key: "recent", label: "Recent" },
-            { key: "highest_rated", label: "Highest Rated" },
-            { key: "favourites", label: "Favourites" },
-            { key: "title_az", label: "Title A-Z" },
-          ].map((opt) => (
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              key={opt.key}
-              onClick={() => setSortFilter(opt.key)}
-              className={`px-3 py-1.5 rounded-full text-sm ${
-                sortFilter === opt.key
-                  ? "bg-red-500 text-white"
-                  : "bg-white/5 hover:bg-white/10"
-              }`}
-            >
-              {opt.label}
-            </motion.button>
-          ))}
+            <span className="h-4 w-px bg-white/20 mx-1" />
+            <span className="text-xs uppercase tracking-wide text-white/45">
+              Sort
+            </span>
+
+            {[
+              { key: "recent", label: "Recent" },
+              { key: "highest_rated", label: "Highest Rated" },
+              { key: "favourites", label: "Favourites" },
+              { key: "title_az", label: "Title A-Z" },
+            ].map((opt) => (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                key={opt.key}
+                onClick={() => setSortFilter(opt.key)}
+                className={`px-3 py-1.5 rounded-full text-sm ${
+                  sortFilter === opt.key
+                    ? "bg-red-500 text-white"
+                    : "bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                {opt.label}
+              </motion.button>
+            ))}
           </div>
         )}
 
@@ -1911,64 +2058,72 @@ const Account = () => {
                         </span>
                       )}
                     </div>
-                    {movieItems.length ? statusFilter === "Want to Watch" ? (
-                      <div className="space-y-4">
-                        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                          <button
-                            onClick={() =>
-                              setWantWatchSections((prev) => ({
-                                ...prev,
-                                movieReleased: !prev.movieReleased,
-                              }))
-                            }
-                            className="w-full flex items-center justify-between text-left"
-                          >
-                            <span className="text-xs uppercase tracking-wide text-white/60">
-                              Released
-                            </span>
-                            <span className="text-xs text-white/45">
-                              {releasedMovieItems.length} {wantWatchSections.movieReleased ? "▾" : "▸"}
-                            </span>
-                          </button>
-                          {wantWatchSections.movieReleased &&
-                            (releasedMovieItems.length ? (
-                              <div className="mt-3">{renderGrid(releasedMovieItems)}</div>
-                            ) : (
-                              <p className="mt-3 text-xs text-white/40">
-                                No released movies in want to watch.
-                              </p>
-                            ))}
-                        </div>
+                    {movieItems.length ? (
+                      statusFilter === "Want to Watch" ? (
+                        <div className="space-y-4">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                            <button
+                              onClick={() =>
+                                setWantWatchSections((prev) => ({
+                                  ...prev,
+                                  movieReleased: !prev.movieReleased,
+                                }))
+                              }
+                              className="w-full flex items-center justify-between text-left"
+                            >
+                              <span className="text-xs uppercase tracking-wide text-white/60">
+                                Released
+                              </span>
+                              <span className="text-xs text-white/45">
+                                {releasedMovieItems.length}{" "}
+                                {wantWatchSections.movieReleased ? "▾" : "▸"}
+                              </span>
+                            </button>
+                            {wantWatchSections.movieReleased &&
+                              (releasedMovieItems.length ? (
+                                <div className="mt-3">
+                                  {renderGrid(releasedMovieItems)}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs text-white/40">
+                                  No released movies in want to watch.
+                                </p>
+                              ))}
+                          </div>
 
-                        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                          <button
-                            onClick={() =>
-                              setWantWatchSections((prev) => ({
-                                ...prev,
-                                movieUnreleased: !prev.movieUnreleased,
-                              }))
-                            }
-                            className="w-full flex items-center justify-between text-left"
-                          >
-                            <span className="text-xs uppercase tracking-wide text-white/60">
-                              Unreleased
-                            </span>
-                            <span className="text-xs text-white/45">
-                              {unreleasedMovieItems.length} {wantWatchSections.movieUnreleased ? "▾" : "▸"}
-                            </span>
-                          </button>
-                          {wantWatchSections.movieUnreleased &&
-                            (unreleasedMovieItems.length ? (
-                              <div className="mt-3">{renderGrid(unreleasedMovieItems)}</div>
-                            ) : (
-                              <p className="mt-3 text-xs text-white/40">
-                                No unreleased movies in want to watch.
-                              </p>
-                            ))}
+                          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                            <button
+                              onClick={() =>
+                                setWantWatchSections((prev) => ({
+                                  ...prev,
+                                  movieUnreleased: !prev.movieUnreleased,
+                                }))
+                              }
+                              className="w-full flex items-center justify-between text-left"
+                            >
+                              <span className="text-xs uppercase tracking-wide text-white/60">
+                                Unreleased
+                              </span>
+                              <span className="text-xs text-white/45">
+                                {unreleasedMovieItems.length}{" "}
+                                {wantWatchSections.movieUnreleased ? "▾" : "▸"}
+                              </span>
+                            </button>
+                            {wantWatchSections.movieUnreleased &&
+                              (unreleasedMovieItems.length ? (
+                                <div className="mt-3">
+                                  {renderGrid(unreleasedMovieItems)}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs text-white/40">
+                                  No unreleased movies in want to watch.
+                                </p>
+                              ))}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      renderGrid(movieItems)
+                      ) : (
+                        renderGrid(movieItems)
+                      )
                     ) : (
                       <p className="text-xs text-white/40">No movies found.</p>
                     )}
@@ -1987,64 +2142,72 @@ const Account = () => {
                         </span>
                       )}
                     </div>
-                    {showItems.length ? statusFilter === "Want to Watch" ? (
-                      <div className="space-y-4">
-                        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                          <button
-                            onClick={() =>
-                              setWantWatchSections((prev) => ({
-                                ...prev,
-                                tvReleased: !prev.tvReleased,
-                              }))
-                            }
-                            className="w-full flex items-center justify-between text-left"
-                          >
-                            <span className="text-xs uppercase tracking-wide text-white/60">
-                              Released
-                            </span>
-                            <span className="text-xs text-white/45">
-                              {releasedShowItems.length} {wantWatchSections.tvReleased ? "▾" : "▸"}
-                            </span>
-                          </button>
-                          {wantWatchSections.tvReleased &&
-                            (releasedShowItems.length ? (
-                              <div className="mt-3">{renderGrid(releasedShowItems)}</div>
-                            ) : (
-                              <p className="mt-3 text-xs text-white/40">
-                                No released shows in want to watch.
-                              </p>
-                            ))}
-                        </div>
+                    {showItems.length ? (
+                      statusFilter === "Want to Watch" ? (
+                        <div className="space-y-4">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                            <button
+                              onClick={() =>
+                                setWantWatchSections((prev) => ({
+                                  ...prev,
+                                  tvReleased: !prev.tvReleased,
+                                }))
+                              }
+                              className="w-full flex items-center justify-between text-left"
+                            >
+                              <span className="text-xs uppercase tracking-wide text-white/60">
+                                Released
+                              </span>
+                              <span className="text-xs text-white/45">
+                                {releasedShowItems.length}{" "}
+                                {wantWatchSections.tvReleased ? "▾" : "▸"}
+                              </span>
+                            </button>
+                            {wantWatchSections.tvReleased &&
+                              (releasedShowItems.length ? (
+                                <div className="mt-3">
+                                  {renderGrid(releasedShowItems)}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs text-white/40">
+                                  No released shows in want to watch.
+                                </p>
+                              ))}
+                          </div>
 
-                        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                          <button
-                            onClick={() =>
-                              setWantWatchSections((prev) => ({
-                                ...prev,
-                                tvUnreleased: !prev.tvUnreleased,
-                              }))
-                            }
-                            className="w-full flex items-center justify-between text-left"
-                          >
-                            <span className="text-xs uppercase tracking-wide text-white/60">
-                              Unreleased
-                            </span>
-                            <span className="text-xs text-white/45">
-                              {unreleasedShowItems.length} {wantWatchSections.tvUnreleased ? "▾" : "▸"}
-                            </span>
-                          </button>
-                          {wantWatchSections.tvUnreleased &&
-                            (unreleasedShowItems.length ? (
-                              <div className="mt-3">{renderGrid(unreleasedShowItems)}</div>
-                            ) : (
-                              <p className="mt-3 text-xs text-white/40">
-                                No unreleased shows in want to watch.
-                              </p>
-                            ))}
+                          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                            <button
+                              onClick={() =>
+                                setWantWatchSections((prev) => ({
+                                  ...prev,
+                                  tvUnreleased: !prev.tvUnreleased,
+                                }))
+                              }
+                              className="w-full flex items-center justify-between text-left"
+                            >
+                              <span className="text-xs uppercase tracking-wide text-white/60">
+                                Unreleased
+                              </span>
+                              <span className="text-xs text-white/45">
+                                {unreleasedShowItems.length}{" "}
+                                {wantWatchSections.tvUnreleased ? "▾" : "▸"}
+                              </span>
+                            </button>
+                            {wantWatchSections.tvUnreleased &&
+                              (unreleasedShowItems.length ? (
+                                <div className="mt-3">
+                                  {renderGrid(unreleasedShowItems)}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-xs text-white/40">
+                                  No unreleased shows in want to watch.
+                                </p>
+                              ))}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      renderGrid(showItems)
+                      ) : (
+                        renderGrid(showItems)
+                      )
                     ) : (
                       <p className="text-xs text-white/40">No shows found.</p>
                     )}
@@ -2057,7 +2220,10 @@ const Account = () => {
                         Favourite Actors &gt;
                       </h2>
                       {actors.length ? (
-                        renderActorGrid(actors, { showRemove: true, showRating: true })
+                        renderActorGrid(actors, {
+                          showRemove: true,
+                          showRating: true,
+                        })
                       ) : (
                         <p className="text-xs text-white/40">
                           No favourite actors found.
@@ -2136,26 +2302,28 @@ const Account = () => {
         onClose={closeQuickRate}
         saving={savingQuickRate}
       />
-      <input
-        ref={actorImageInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onActorImageFilePicked}
-      />
-      <ActorImageLinkModal
-        open={actorImageLinkModal.open}
-        actor={actorImageLinkModal.actor}
-        value={actorImageLinkValue}
-        isValid={actorImageLinkValid}
+      <ActorImageSourceModal
+        open={actorImageModal.open}
+        actor={actorImageModal.actor}
+        mode={actorImageMode}
+        onModeChange={(nextMode) => {
+          setActorImageMode(nextMode);
+          setActorImageLinkValue("");
+          setActorImageUploadPreview("");
+          setActorImageLinkPreviewError(false);
+        }}
+        linkValue={actorImageLinkValue}
+        linkValid={actorImageLinkValid}
         previewError={actorImageLinkPreviewError}
-        saving={savingActorImageId === Number(actorImageLinkModal.actor?.id)}
-        onChange={(nextValue) => {
+        uploadPreview={actorImageUploadPreview}
+        saving={savingActorImageId === Number(actorImageModal.actor?.id)}
+        onLinkChange={(nextValue) => {
           setActorImageLinkValue(nextValue);
           setActorImageLinkPreviewError(false);
         }}
+        onUploadPick={onActorImageUploadPicked}
         onPreviewError={() => setActorImageLinkPreviewError(true)}
-        onClose={closeActorImageLinkModal}
+        onClose={closeActorImageModal}
         onSave={saveActorImageFromModal}
       />
 
@@ -2167,7 +2335,3 @@ const Account = () => {
 };
 
 export default Account;
-
-
-
-
