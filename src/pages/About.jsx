@@ -30,7 +30,7 @@ const capabilities = [
   },
 ];
 
-const creatorTags = ["Frontend Developer", "UI/UX Designer", "React", "Firebase"];
+const creatorTags = ["Software Engineer", "UI/UX Designer"];
 
 const reveal = {
   hidden: { opacity: 0, y: 20 },
@@ -121,7 +121,11 @@ const About = () => {
               <motion.div
                 className="h-14 w-14 rounded-xl overflow-hidden border border-white/20 shadow-[0_10px_28px_rgba(239,68,68,0.5)]"
                 animate={{ y: [0, -4, 0], rotate: [0, -2, 0] }}
-                transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 4.5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
                 onClick={() => setIsImageOpen(true)}
               >
                 <img
@@ -136,8 +140,8 @@ const About = () => {
               </div>
             </div>
             <p className="mt-4 text-sm text-white/75 leading-relaxed">
-              Crafting a focused streaming companion centered on clarity,
-              speed, and polished UI interactions.
+              Crafting a focused streaming companion centered on clarity, speed,
+              and polished UI interactions.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {creatorTags.map((tag, i) => (
