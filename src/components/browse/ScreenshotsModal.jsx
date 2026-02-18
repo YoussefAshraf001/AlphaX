@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IoMdClose } from "react-icons/io";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
@@ -19,8 +19,10 @@ const ScreenshotsModal = ({
   // --- Guards ---
   const total = images.length;
   const safeIndex = Math.min(Math.max(currentIndex, 0), total - 1);
-  const getDisplayImageUrl = (index) =>
-    `https://image.tmdb.org/t/p/w1280/${images[index].file_path}`;
+  const getDisplayImageUrl = useCallback(
+    (index) => `https://image.tmdb.org/t/p/w1280/${images[index].file_path}`,
+    [images],
+  );
   const getOriginalImageUrl = (index) =>
     `https://image.tmdb.org/t/p/original/${images[index].file_path}`;
 
@@ -70,7 +72,7 @@ const ScreenshotsModal = ({
       const img = new Image();
       img.src = getDisplayImageUrl(index);
     });
-  }, [safeIndex, total, loadedIndexes]);
+  }, [safeIndex, total, loadedIndexes, getDisplayImageUrl]);
 
   // --- Scroll lock ---
   useEffect(() => {

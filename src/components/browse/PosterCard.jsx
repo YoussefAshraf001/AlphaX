@@ -16,14 +16,6 @@ const STATUS_ACTIONS = [
   { key: "Dropped", icon: IoIosClose },
 ];
 
-const STATUS_COLORS = {
-  "Want to Watch": "bg-blue-500",
-  Watching: "bg-red-500",
-  Watched: "bg-green-500",
-  Paused: "bg-yellow-500",
-  Dropped: "bg-neutral-500",
-};
-
 const STATUS_MAP = {
   want: "Want to Watch",
   "want to watch": "Want to Watch",
