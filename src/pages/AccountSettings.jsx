@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
 import toast from "react-hot-toast";
 import { sendPasswordResetEmail } from "firebase/auth";
-import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { IoMdArrowBack } from "react-icons/io";
 import { useNavigate } from "react-router-dom";
 
@@ -47,14 +47,6 @@ const getCroppedCompressedImage = async (src, cropAreaPixels) => {
   return canvas.toDataURL("image/jpeg", 0.8);
 };
 
-const withCacheBust = (value) => {
-  if (!value || typeof value !== "string") return value;
-  if (value.startsWith("data:")) return value;
-  if (!/^https?:\/\//i.test(value)) return value;
-  const sep = value.includes("?") ? "&" : "?";
-  return `${value}${sep}v=${Date.now()}`;
-};
-
 const AccountSettings = () => {
   const { user } = UserAuth();
   const { selectedProfile } = useProfile();
@@ -77,7 +69,6 @@ const AccountSettings = () => {
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
-  const [refreshingProfile, setRefreshingProfile] = useState(false);
   const canGoBack = typeof window !== "undefined" && window.history.length > 1;
 
   useEffect(() => {
@@ -141,37 +132,6 @@ const AccountSettings = () => {
       setShowCrop(true);
     };
     reader.readAsDataURL(file);
-  };
-
-  const refreshProfileData = async () => {
-    if (!user?.email) return;
-    try {
-      setRefreshingProfile(true);
-      const profileRef = doc(db, ...profileDocPath(user.email, activeProfileId));
-      const snap = await getDoc(profileRef);
-      const data = snap.data() || {};
-
-      const nextAvatar =
-        data.avatar ||
-        data.avatarBase64 ||
-        selectedProfile?.avatar ||
-        selectedProfile?.avatarBase64 ||
-        NotFoundPlaceholder;
-
-      setAvatarPreview(withCacheBust(nextAvatar));
-      setDisplayName(
-        data.displayName ||
-          data.name ||
-          selectedProfile?.displayName ||
-          selectedProfile?.name ||
-          "",
-      );
-      toast.success("Profile refreshed");
-    } catch {
-      toast.error("Could not refresh profile");
-    } finally {
-      setRefreshingProfile(false);
-    }
   };
 
   const persistAvatar = async (base64) => {
@@ -345,13 +305,6 @@ const AccountSettings = () => {
                   <p className="text-xs text-white/50 mt-2 text-center">
                     Upload, crop, and save to your profile. GIFs are supported.
                   </p>
-                  <button
-                    onClick={refreshProfileData}
-                    disabled={refreshingProfile}
-                    className="mt-2 w-full rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed text-white py-2 text-sm font-medium transition"
-                  >
-                    {refreshingProfile ? "Refreshing..." : "Refresh Image"}
-                  </button>
                 </div>
               </div>
 

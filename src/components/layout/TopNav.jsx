@@ -369,10 +369,12 @@ const TopNav = () => {
                     flex items-center gap-2
                     px-4 py-2
                     rounded-full
-                    bg-red-500/5
-                    border border-red-500/40
-                    text-sm text-white/80
+                    bg-black/65
+                    border border-white/20
+                    text-sm text-white/90
+                    shadow-[0_8px_24px_rgba(0,0,0,0.35)]
                     hover:text-white
+                    hover:bg-black/75
                     transition
                   "
                 >
@@ -383,7 +385,7 @@ const TopNav = () => {
                       e.currentTarget.src = NotFoundPlaceholder;
                     }}
                     alt=""
-                    className="w-8 h-8 rounded-full object-cover border border-white/20"
+                    className="w-8 h-8 rounded-full object-cover border border-white/75 bg-white/20 shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_0_14px_rgba(255,255,255,0.18)]"
                   />
                   {selectedProfile?.name || "Account"}
                   <motion.span
