@@ -1,4 +1,5 @@
 import { Route, Routes, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Toaster } from "react-hot-toast";
 
@@ -42,6 +43,34 @@ function App() {
     normalizedPath === "/profiles" ||
     normalizedPath === "/login" ||
     normalizedPath === "/signup";
+
+  useEffect(() => {
+    const TITLE_PREFIX = "AlphaX";
+    const titleByPath = {
+      "/": "Home",
+      "/for-you": "For You",
+      "/login": "Sign In",
+      "/signup": "Sign Up",
+      "/profiles": "Choose Profile",
+      "/movies": "Movies",
+      "/shows": "Series",
+      "/watchlist": "Watchlist",
+      "/release-calendar": "Release Calendar",
+      "/about": "About",
+      "/help": "Help",
+      "/accountsettings": "Account Settings",
+    };
+
+    let pageTitle = titleByPath[normalizedPath];
+    if (!pageTitle) {
+      if (normalizedPath.startsWith("/movies/")) pageTitle = "Movie Details";
+      else if (normalizedPath.startsWith("/shows/")) pageTitle = "Series Details";
+      else if (normalizedPath.startsWith("/person/")) pageTitle = "Actor Details";
+      else pageTitle = "Browse";
+    }
+
+    document.title = `${pageTitle} | ${TITLE_PREFIX}`;
+  }, [normalizedPath]);
 
   return (
     <>
