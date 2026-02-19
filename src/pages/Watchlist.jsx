@@ -1247,14 +1247,20 @@ const Account = () => {
     const normalized = Math.max(1, Math.min(5, Number(nextValue) || 0));
     const ref = doc(
       db,
-      ...profileRatingItemPath(currentUser.email, activeProfileId, "actors", actor.id),
+      ...profileRatingItemPath(
+        currentUser.email,
+        activeProfileId,
+        "actors",
+        actor.id,
+      ),
     );
     try {
       await setDoc(
         ref,
         {
           id: Number(actor.id),
-          title: actor.name || actorRatingsById?.[String(actor.id)]?.title || "",
+          title:
+            actor.name || actorRatingsById?.[String(actor.id)]?.title || "",
           image:
             actor.image ||
             actorRatingsById?.[String(actor.id)]?.image ||
@@ -1927,10 +1933,10 @@ const Account = () => {
           const actorRatingValue = Number(
             actor.value || actorRatingsById?.[String(actor.id)]?.value || 0,
           );
-          const actorReaction =
-            actorRatingValue > 0 ? EMOJI_SCALE[actorRatingValue - 1] : "--";
           const actorReactionLabel =
-            actorRatingValue > 0 ? REACTION_LABELS[actorRatingValue - 1] : "Not rated";
+            actorRatingValue > 0
+              ? REACTION_LABELS[actorRatingValue - 1]
+              : "Not rated";
           const hoverValue = Number(actorHoverValueById[String(actor.id)] || 0);
           const previewValue = hoverValue > 0 ? hoverValue : actorRatingValue;
           return (
@@ -2085,7 +2091,9 @@ const Account = () => {
                       })}
                     </div>
                     <span className="text-[10px] uppercase tracking-[0.14em] text-white/65">
-                      {previewValue > 0 ? REACTION_LABELS[previewValue - 1] : actorReactionLabel}
+                      {previewValue > 0
+                        ? REACTION_LABELS[previewValue - 1]
+                        : actorReactionLabel}
                     </span>
                   </div>
                 </div>
