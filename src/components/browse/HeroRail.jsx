@@ -204,7 +204,7 @@ const HeroRail = ({ poolEndpoint }) => {
           >
             <YouTube
               videoId={trailerKey}
-              className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:block"
+              className="absolute inset-0 [&>iframe]:absolute [&>iframe]:left-1/2 [&>iframe]:top-1/2 [&>iframe]:h-[56.25vw] [&>iframe]:w-[177.78vh] [&>iframe]:min-h-full [&>iframe]:min-w-full [&>iframe]:-translate-x-1/2 [&>iframe]:-translate-y-1/2 [&>iframe]:block"
               opts={{
                 width: "100%",
                 height: "100%",

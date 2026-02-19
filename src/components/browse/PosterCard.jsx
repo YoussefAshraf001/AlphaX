@@ -11,7 +11,7 @@ import NotFoundPlaceholder from "../../assets/notFound-Placeholder.jpg";
 const STATUS_ACTIONS = [
   { key: "Want to Watch", icon: IoAdd },
   { key: "Watching", icon: FaPlay },
-  { key: "Watched", icon: MdDoneOutline },
+  { key: "Finished", icon: MdDoneOutline },
   { key: "Paused", icon: IoIosPause },
   { key: "Dropped", icon: IoIosClose },
 ];
@@ -20,7 +20,8 @@ const STATUS_MAP = {
   want: "Want to Watch",
   "want to watch": "Want to Watch",
   watching: "Watching",
-  watched: "Watched",
+  watched: "Finished",
+  finished: "Finished",
   paused: "Paused",
   dropped: "Dropped",
 };
@@ -48,6 +49,7 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
     item.release_date?.slice(0, 4) ||
     item.first_air_date?.slice(0, 4) ||
     "";
+  const yearLabel = item.releaseDateLabel || year || (item.isUnreleased ? "TBA" : "");
   const detailPath = isTV ? `/shows/${item.id}` : `/movies/${item.id}`;
 
   const handleOpenDetails = (event) => {
@@ -101,7 +103,7 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
           "
         >
           <div className="absolute inset-0 flex items-center justify-center text-xs text-white/70 tracking-wide">
-            No Poster
+            {item.isUnreleased ? "In Production" : "No Poster"}
           </div>
         </div>
       )}
@@ -129,7 +131,7 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
           z-20
         "
       >
-        {year && <div className="text-xs text-white/70">{year}</div>}
+        {yearLabel && <div className="text-xs text-white/70">{yearLabel}</div>}
       </div>
 
       {/* STATUS BUTTONS */}

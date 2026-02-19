@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -38,7 +38,7 @@ import {
 const STATUS_ACTIONS = [
   { key: "Want to Watch", label: "Want to Watch" },
   { key: "Watching", label: "Watching" },
-  { key: "Watched", label: "Watched" },
+  { key: "Finished", label: "Finished" },
   { key: "Paused", label: "Paused" },
   { key: "Dropped", label: "Dropped" },
 ];
@@ -61,6 +61,11 @@ const ShowDetails = () => {
   const [status, setStatus] = useState("");
   const [favourite, setFavourite] = useState(false);
   const [userRatingValue, setUserRatingValue] = useState(0);
+  const [savedNotes, setSavedNotes] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isNotesLoading, setIsNotesLoading] = useState(true);
+  const [savedTotalEpisodes, setSavedTotalEpisodes] = useState(null);
   const [watchedEpisodes, setWatchedEpisodes] = useState(0);
   const [activeTab, setActiveTab] = useState("cast");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -68,6 +73,7 @@ const ShowDetails = () => {
   const [loadedCastImages, setLoadedCastImages] = useState({});
   const [failedCastImages, setFailedCastImages] = useState({});
   const [isBackdropReady, setIsBackdropReady] = useState(false);
+  const autoStatusSyncRef = useRef(false);
 
   const CastArrow = ({ onClick, direction }) => (
     <button
@@ -104,19 +110,19 @@ const ShowDetails = () => {
     const fetchShowDetails = async () => {
       try {
         const [showRes, castRes, imagesRes, reviewsRes] = await Promise.all([
-            axios.get(
-              `https://api.themoviedb.org/3/tv/${id}?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
-            ),
-            axios.get(
-              `https://api.themoviedb.org/3/tv/${id}/aggregate_credits?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
-            ),
-            axios.get(
-              `https://api.themoviedb.org/3/tv/${id}/images?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
-            ),
-            axios.get(
-              `https://api.themoviedb.org/3/tv/${id}/reviews?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
-            ),
-          ]);
+          axios.get(
+            `https://api.themoviedb.org/3/tv/${id}?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
+          ),
+          axios.get(
+            `https://api.themoviedb.org/3/tv/${id}/aggregate_credits?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
+          ),
+          axios.get(
+            `https://api.themoviedb.org/3/tv/${id}/images?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
+          ),
+          axios.get(
+            `https://api.themoviedb.org/3/tv/${id}/reviews?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
+          ),
+        ]);
 
         setShow(showRes.data);
         setCast(
@@ -147,28 +153,46 @@ const ShowDetails = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!user?.email || !show) return;
+    if (!user?.email || !show) {
+      setIsNotesLoading(false);
+      return;
+    }
 
     const ref = doc(
       db,
       ...profileSavedItemPath(user.email, activeProfileId, "shows", show.id),
     );
+    setIsNotesLoading(true);
 
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        setStatus(data.status);
+        const normalizedStatus =
+          data.status === "Watched" ? "Finished" : data.status;
+        setStatus(normalizedStatus);
         setFavourite(Boolean(data.favourite));
+        const notes = String(data.notes || "");
+        setSavedNotes(notes);
+        setNotesDraft(notes);
         setWatchedEpisodes(
           Number.isFinite(Number(data.watchedEpisodes))
             ? Number(data.watchedEpisodes)
             : 0,
         );
+        setSavedTotalEpisodes(
+          Number.isFinite(Number(data.totalEpisodes))
+            ? Number(data.totalEpisodes)
+            : null,
+        );
       } else {
         setStatus(null);
         setFavourite(false);
+        setSavedNotes("");
+        setNotesDraft("");
         setWatchedEpisodes(0);
+        setSavedTotalEpisodes(null);
       }
+      setIsNotesLoading(false);
     });
 
     return () => unsub();
@@ -288,7 +312,7 @@ const ShowDetails = () => {
         return next;
       });
 
-      toast.success(`"${actor.name}" removed from favourites`);
+      toast.success(`${actor.name} removed from favourites`);
     } catch {
       toast.error("Failed to remove actor");
     }
@@ -352,25 +376,24 @@ const ShowDetails = () => {
           rating: show.vote_average,
           mediaType: "tv",
           status: newStatus,
-          totalEpisodes:
-            totalEpisodesNumber || null,
+          notInterested: false,
+          dropReason: null,
+          totalEpisodes: totalEpisodesNumber || null,
           totalSeasons:
             Number.isFinite(Number(show.number_of_seasons)) &&
             Number(show.number_of_seasons) > 0
               ? Number(show.number_of_seasons)
               : null,
           watchedEpisodes:
-            newStatus === "Watched"
-              ? totalEpisodesNumber
-              : watchedEpisodes,
+            newStatus === "Finished" ? totalEpisodesNumber : watchedEpisodes,
           currentSeason:
-            newStatus === "Watched"
+            newStatus === "Finished"
               ? getSeasonEpisodeMeta(totalEpisodesNumber)?.season || null
               : watchedEpisodes > 0
                 ? getSeasonEpisodeMeta(watchedEpisodes)?.season || null
                 : null,
           currentEpisode:
-            newStatus === "Watched"
+            newStatus === "Finished"
               ? getSeasonEpisodeMeta(totalEpisodesNumber)?.episode || null
               : watchedEpisodes > 0
                 ? getSeasonEpisodeMeta(watchedEpisodes)?.episode || null
@@ -381,10 +404,10 @@ const ShowDetails = () => {
       );
 
       setStatus(newStatus);
-      if (newStatus === "Watched") {
+      if (newStatus === "Finished") {
         setWatchedEpisodes(totalEpisodesNumber);
       }
-      toast.success(`"${show.name}" marked as ${newStatus}`);
+      toast.success(`${show.name} marked as ${newStatus}`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to update status");
@@ -442,8 +465,9 @@ const ShowDetails = () => {
           rating: show.vote_average,
           mediaType: "tv",
           status: status ?? null,
-          totalEpisodes:
-            totalEpisodesNumber || null,
+          notInterested: false,
+          dropReason: null,
+          totalEpisodes: totalEpisodesNumber || null,
           totalSeasons:
             Number.isFinite(Number(show.number_of_seasons)) &&
             Number(show.number_of_seasons) > 0
@@ -464,7 +488,11 @@ const ShowDetails = () => {
         { merge: true },
       );
       setFavourite(next);
-      toast.success(next ? "Added to favourites" : "Removed from favourites");
+      toast.success(
+        next
+          ? `${show.name} added to favourites`
+          : `${show.name} removed from favourites`,
+      );
     } catch {
       toast.error("Failed to update favourite");
     }
@@ -513,6 +541,170 @@ const ShowDetails = () => {
       toast.error("Failed to save rating");
     }
   };
+
+  const saveNotes = async (nextNotes = notesDraft) => {
+    if (!user?.email || !show) {
+      toast.error("Login required");
+      return;
+    }
+    if (isNotesLoading) return;
+
+    const normalizedNotes = String(nextNotes || "").trim();
+    setIsSavingNotes(true);
+
+    try {
+      const ref = doc(
+        db,
+        ...profileSavedItemPath(user.email, activeProfileId, "shows", show.id),
+      );
+
+      await setDoc(
+        ref,
+        {
+          id: show.id,
+          title: show.name,
+          poster: show.poster_path ?? null,
+          backdrop: show.backdrop_path ?? null,
+          overview: show.overview || null,
+          releaseDate: show.first_air_date ?? null,
+          rating: show.vote_average ?? null,
+          mediaType: "tv",
+          status: status ?? null,
+          notInterested: false,
+          dropReason: null,
+          favourite: Boolean(favourite),
+          totalEpisodes: totalEpisodesNumber || null,
+          totalSeasons:
+            Number.isFinite(Number(show.number_of_seasons)) &&
+            Number(show.number_of_seasons) > 0
+              ? Number(show.number_of_seasons)
+              : null,
+          watchedEpisodes,
+          notes: normalizedNotes,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setSavedNotes(normalizedNotes);
+      setNotesDraft(normalizedNotes);
+      toast.success(normalizedNotes ? "Notes saved" : "Notes cleared");
+    } catch {
+      toast.error("Failed to save notes");
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !user?.email ||
+      !show?.id ||
+      status !== "Finished" ||
+      autoStatusSyncRef.current
+    ) {
+      return;
+    }
+
+    const trackedEpisodes = Number(savedTotalEpisodes || 0);
+    if (trackedEpisodes <= 0) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const seasonEpisodeCountsBase = Array.isArray(show.seasons)
+      ? show.seasons
+          .filter(
+            (season) =>
+              Number(season?.season_number) > 0 &&
+              Number(season?.episode_count) > 0,
+          )
+          .map((season) => ({
+            seasonNumber: Number(season.season_number),
+            episodeCount: Number(season.episode_count),
+            airDate: season.air_date || null,
+          }))
+      : [];
+
+    const lastAiredSeasonNumber = Number(show.last_episode_to_air?.season_number);
+    const lastAiredEpisodeNumber = Number(show.last_episode_to_air?.episode_number);
+    const hasLastAiredEpisode =
+      lastAiredSeasonNumber > 0 && lastAiredEpisodeNumber > 0;
+
+    const releasedSeasonEpisodeCounts = hasLastAiredEpisode
+      ? seasonEpisodeCountsBase
+          .filter((season) => season.seasonNumber <= lastAiredSeasonNumber)
+          .map((season) => ({
+            episodeCount:
+              season.seasonNumber === lastAiredSeasonNumber
+                ? Math.min(season.episodeCount, lastAiredEpisodeNumber)
+                : season.episodeCount,
+          }))
+          .filter((season) => season.episodeCount > 0)
+      : seasonEpisodeCountsBase
+          .filter((season) => {
+            if (!season.airDate) return false;
+            const dt = new Date(`${season.airDate}T00:00:00`);
+            return !Number.isNaN(dt.getTime()) && dt.getTime() <= today.getTime();
+          })
+          .map((season) => ({
+            episodeCount: season.episodeCount,
+          }));
+
+    const hasSeasonAirDateInfo = seasonEpisodeCountsBase.some((season) =>
+      Boolean(season.airDate),
+    );
+    const releasedEpisodeTotal = releasedSeasonEpisodeCounts.length
+      ? releasedSeasonEpisodeCounts.reduce(
+          (sum, season) => sum + season.episodeCount,
+          0,
+        )
+      : !hasSeasonAirDateInfo &&
+            Number.isFinite(Number(show.number_of_episodes)) &&
+            Number(show.number_of_episodes) > 0
+        ? Number(show.number_of_episodes)
+        : 0;
+
+    if (
+      releasedEpisodeTotal <= trackedEpisodes ||
+      watchedEpisodes < trackedEpisodes
+    ) {
+      return;
+    }
+
+    const syncStatusForNewEpisodes = async () => {
+      autoStatusSyncRef.current = true;
+      try {
+        const ref = doc(
+          db,
+          ...profileSavedItemPath(user.email, activeProfileId, "shows", show.id),
+        );
+
+        await setDoc(
+          ref,
+          {
+            status: "Want to Watch",
+            totalEpisodes: releasedEpisodeTotal,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        toast(`New episodes detected. Moved to "Want to Watch".`, { icon: "i" });
+      } catch {
+        toast.error("Failed to sync status for new episodes");
+      } finally {
+        autoStatusSyncRef.current = false;
+      }
+    };
+
+    syncStatusForNewEpisodes();
+  }, [
+    user?.email,
+    show,
+    status,
+    savedTotalEpisodes,
+    watchedEpisodes,
+    activeProfileId,
+  ]);
 
   if (!show) {
     return null;
@@ -587,11 +779,9 @@ const ShowDetails = () => {
     typeof show.number_of_seasons === "number"
       ? String(show.number_of_seasons)
       : "N/A";
-  const episodesDisplay =
-    typeof show.number_of_episodes === "number"
-      ? String(show.number_of_episodes)
-      : "N/A";
-  const seasonEpisodeCounts = Array.isArray(show.seasons)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const seasonEpisodeCountsBase = Array.isArray(show.seasons)
     ? show.seasons
         .filter(
           (season) =>
@@ -601,24 +791,97 @@ const ShowDetails = () => {
         .map((season) => ({
           seasonNumber: Number(season.season_number),
           episodeCount: Number(season.episode_count),
+          airDate: season.air_date || null,
         }))
     : [];
-  const seasonProgressTargets = seasonEpisodeCounts.reduce((acc, season) => {
+  const lastAiredSeasonNumber = Number(show.last_episode_to_air?.season_number);
+  const lastAiredEpisodeNumber = Number(show.last_episode_to_air?.episode_number);
+  const hasLastAiredEpisode =
+    lastAiredSeasonNumber > 0 && lastAiredEpisodeNumber > 0;
+  const seasonEpisodeCounts = hasLastAiredEpisode
+    ? seasonEpisodeCountsBase
+        .filter((season) => season.seasonNumber <= lastAiredSeasonNumber)
+        .map((season) => ({
+          seasonNumber: season.seasonNumber,
+          episodeCount:
+            season.seasonNumber === lastAiredSeasonNumber
+              ? Math.min(season.episodeCount, lastAiredEpisodeNumber)
+              : season.episodeCount,
+        }))
+        .filter((season) => season.episodeCount > 0)
+    : seasonEpisodeCountsBase
+        .filter((season) => {
+          if (!season.airDate) return false;
+          const dt = new Date(`${season.airDate}T00:00:00`);
+          return !Number.isNaN(dt.getTime()) && dt.getTime() <= today.getTime();
+        })
+        .map((season) => ({
+          seasonNumber: season.seasonNumber,
+          episodeCount: season.episodeCount,
+        }));
+  const hasSeasonAirDateInfo = seasonEpisodeCountsBase.some((season) =>
+    Boolean(season.airDate),
+  );
+  const normalizedSeasonEpisodeCounts = seasonEpisodeCounts.length
+    ? seasonEpisodeCounts
+    : hasSeasonAirDateInfo
+      ? []
+      : seasonEpisodeCountsBase.map((season) => ({
+          seasonNumber: season.seasonNumber,
+          episodeCount: season.episodeCount,
+        }));
+  const upcomingSeasonReleases = Array.isArray(show.seasons)
+    ? show.seasons
+        .filter((season) => Number(season?.season_number) > 0 && season?.air_date)
+        .map((season) => ({
+          seasonNumber: Number(season.season_number),
+          airDate: season.air_date,
+        }))
+        .filter((season) => {
+          const dt = new Date(`${season.airDate}T00:00:00`);
+          return !Number.isNaN(dt.getTime()) && dt.getTime() > today.getTime();
+        })
+        .sort((a, b) => a.airDate.localeCompare(b.airDate))
+    : [];
+  const nextUpcomingSeason = upcomingSeasonReleases[0] || null;
+  const nextEpisodeAirDate = show.next_episode_to_air?.air_date || null;
+  const nextEpisodeSeasonNumber = Number(show.next_episode_to_air?.season_number);
+  const upcomingSeasonDisplayDate =
+    nextUpcomingSeason &&
+    nextEpisodeAirDate &&
+    nextEpisodeSeasonNumber === nextUpcomingSeason.seasonNumber
+      ? nextEpisodeAirDate
+      : nextUpcomingSeason?.airDate || null;
+  const nextUpcomingSeasonDate = nextUpcomingSeason
+    ? new Date(`${upcomingSeasonDisplayDate}T00:00:00`).toLocaleDateString(
+        undefined,
+        {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        },
+      )
+    : null;
+  const seasonProgressTargets = normalizedSeasonEpisodeCounts.reduce(
+    (acc, season) => {
     const prevTotal = acc.length ? acc[acc.length - 1].seasonEndEpisode : 0;
     acc.push({
       ...season,
       seasonEndEpisode: prevTotal + season.episodeCount,
     });
     return acc;
-  }, []);
-  const totalEpisodesFromSeasons = seasonEpisodeCounts.reduce(
+    },
+    [],
+  );
+  const totalEpisodesFromSeasons = normalizedSeasonEpisodeCounts.reduce(
     (sum, season) => sum + season.episodeCount,
     0,
   );
   const totalEpisodesNumber =
     totalEpisodesFromSeasons > 0
       ? totalEpisodesFromSeasons
-      : Number.isFinite(Number(show.number_of_episodes)) &&
+      : !hasSeasonAirDateInfo &&
+          Number.isFinite(Number(show.number_of_episodes)) &&
           Number(show.number_of_episodes) > 0
         ? Number(show.number_of_episodes)
         : 0;
@@ -645,13 +908,24 @@ const ShowDetails = () => {
   const runtimeDisplay = runtimeMinutes
     ? `${runtimeMinutes} min`
     : "Not available";
-  const canGoBack =
-    typeof window !== "undefined" && window.history.length > 1;
+  const canGoBack = typeof window !== "undefined" && window.history.length > 1;
+  const normalizedShowStatus = String(show.status || "").toLowerCase();
+  const isEndedSeries = normalizedShowStatus === "ended";
+  const isCancelledSeries =
+    normalizedShowStatus === "cancelled" || normalizedShowStatus === "canceled";
+  const airDateLabel = isEndedSeries
+    ? "Last Air Date"
+    : "Next Episode Air Date";
+  const airDateValue = isEndedSeries
+    ? show.last_air_date || "Unknown"
+    : isCancelledSeries
+      ? "Cancelled"
+      : show.next_episode_to_air?.air_date || "TBA";
 
   const getSeasonEpisodeMeta = (episodeOrdinal) => {
-    if (!seasonEpisodeCounts.length || episodeOrdinal <= 0) return null;
+    if (!normalizedSeasonEpisodeCounts.length || episodeOrdinal <= 0) return null;
     let consumed = 0;
-    for (const season of seasonEpisodeCounts) {
+    for (const season of normalizedSeasonEpisodeCounts) {
       const limit = consumed + season.episodeCount;
       if (episodeOrdinal <= limit) {
         return {
@@ -662,7 +936,8 @@ const ShowDetails = () => {
       }
       consumed = limit;
     }
-    const last = seasonEpisodeCounts[seasonEpisodeCounts.length - 1];
+    const last =
+      normalizedSeasonEpisodeCounts[normalizedSeasonEpisodeCounts.length - 1];
     return {
       season: last.seasonNumber,
       episode: last.episodeCount,
@@ -709,8 +984,8 @@ const ShowDetails = () => {
 
     const nextStatus =
       totalEpisodesNumber > 0 && clamped >= totalEpisodesNumber
-        ? "Watched"
-        : status === "Watched"
+        ? "Finished"
+        : status === "Finished"
           ? "Watching"
           : status || "Watching";
 
@@ -830,8 +1105,8 @@ const ShowDetails = () => {
                       isUnreleased
                         ? "bg-black/65 text-white/45 border border-white/30 shadow-lg shadow-black/70 backdrop-blur-sm"
                         : favourite
-                        ? "bg-red-600/95 border border-red-300/60 shadow-lg shadow-red-900/40 backdrop-blur-sm"
-                        : "bg-black/75 border border-white/45 shadow-lg shadow-black/70 backdrop-blur-sm hover:bg-black/90"
+                          ? "bg-red-600/95 border border-red-300/60 shadow-lg shadow-red-900/40 backdrop-blur-sm"
+                          : "bg-black/75 border border-white/45 shadow-lg shadow-black/70 backdrop-blur-sm hover:bg-black/90"
                     }`}
                   >
                     {favourite ? (
@@ -903,14 +1178,6 @@ const ShowDetails = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="rounded-xl bg-white/5 border border-white/10 p-3">
                     <p className="text-xs uppercase tracking-wide text-neutral-400">
-                      Episodes
-                    </p>
-                    <p className="text-sm font-semibold text-white">
-                      {episodesDisplay}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-xs uppercase tracking-wide text-neutral-400">
                       Language
                     </p>
                     <p className="text-sm font-semibold text-white uppercase">
@@ -933,6 +1200,31 @@ const ShowDetails = () => {
                       {show.status || "N/A"}
                     </p>
                   </div>
+                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                    <p className="text-xs uppercase tracking-wide text-neutral-400">
+                      {airDateLabel}
+                    </p>
+                    <p className="text-sm font-semibold text-white">
+                      {airDateValue}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
+                  {STATUS_ACTIONS.map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => saveWithStatus(s.key)}
+                      title={s.label}
+                      className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
+                        status === s.key
+                          ? "bg-red-600 text-white shadow-lg shadow-red-700/30"
+                          : "bg-white/10 hover:bg-white/20 text-neutral-200"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
@@ -942,20 +1234,26 @@ const ShowDetails = () => {
                         Episode Progress
                       </p>
                       <p className="text-sm font-semibold text-white mt-1">
-                        {safeWatchedEpisodes} / {totalEpisodesNumber || "?"} watched
+                        {safeWatchedEpisodes} / {totalEpisodesNumber || "?"}{" "}
+                        watched
                       </p>
                       <p className="text-xs text-white/65 mt-0.5">
                         {totalEpisodesNumber && nextEpisodeMeta
-                          ? `Up next S${nextEpisodeMeta.season} • E${nextEpisodeMeta.episode}/${nextEpisodeMeta.inSeasonTotal}`
+                          ? `Up next S${nextEpisodeMeta.season} • E${nextEpisodeMeta.episode}`
                           : totalEpisodesNumber
                             ? `Completed • ${episodesLeft} left • ${progressPercent}%`
                             : "Episode total unavailable"}
                       </p>
                       <p className="text-xs text-white/55 mt-0.5">
                         {currentEpisodeMeta
-                          ? `Last watched S${currentEpisodeMeta.season} • E${currentEpisodeMeta.episode}/${currentEpisodeMeta.inSeasonTotal}`
+                          ? `Last watched S${currentEpisodeMeta.season} • E${currentEpisodeMeta.episode}`
                           : "No episodes marked yet"}
                       </p>
+                      {nextUpcomingSeason && (
+                        <p className="text-xs text-amber-300/90 mt-1">
+                          {`Season ${nextUpcomingSeason.seasonNumber} coming ${nextUpcomingSeasonDate}`}
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -1030,7 +1328,7 @@ const ShowDetails = () => {
                 <PersonalRating
                   ratingType="stars"
                   value={userRatingValue}
-                  starSizeClass="text-3xl"
+                  starSizeClass="text-2xl"
                   onRate={(value) => {
                     setUserRatingValue(value);
                     savePersonalRating(value);
@@ -1048,26 +1346,50 @@ const ShowDetails = () => {
                   }
                 />
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {STATUS_ACTIONS.map((s) => (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-wide text-neutral-400">
+                      Personal Notes
+                    </p>
+                    {savedNotes && (
+                      <button
+                        onClick={() => saveNotes("")}
+                        disabled={
+                          !user?.email || isSavingNotes || isNotesLoading
+                        }
+                        className="text-[11px] px-2 py-1 rounded-full border border-white/20 bg-white/10 text-white/80 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    disabled={!user?.email || isSavingNotes || isNotesLoading}
+                    rows={3}
+                    placeholder="Add your thoughts, reminders, or watch notes..."
+                    className="mt-2 w-full min-h-[50px] max-h-[200px] rounded-lg border border-transparent bg-black/40 px-3 py-2 text-sm text-white placeholder-white/45 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                  <div className="mt-2 flex justify-end">
                     <button
-                      key={s.key}
-                      onClick={() => saveWithStatus(s.key)}
-                      title={s.label}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
-                        status === s.key
-                          ? "bg-red-600 text-white shadow-lg shadow-red-700/30"
-                          : "bg-white/10 hover:bg-white/20 text-neutral-200"
-                      }`}
+                      onClick={() => saveNotes(notesDraft)}
+                      disabled={
+                        !user?.email ||
+                        isSavingNotes ||
+                        isNotesLoading ||
+                        notesDraft === savedNotes
+                      }
+                      className="px-3 py-1.5 rounded-md text-xs font-semibold border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {s.label}
+                      {isNotesLoading
+                        ? "Loading..."
+                        : isSavingNotes
+                          ? "Saving..."
+                          : "Save Notes"}
                     </button>
-                  ))}
+                  </div>
                 </div>
-                <p className="text-xs text-white/55 flex items-center gap-1">
-                  <span aria-hidden="true">↓</span>
-                  Cast, reviews, screenshots, and awards are below
-                </p>
               </div>
             </div>
           </div>
@@ -1162,15 +1484,6 @@ const ShowDetails = () => {
                                     src={profileSrc}
                                     alt={actor.name}
                                     loading="lazy"
-                                    ref={(imgEl) => {
-                                      if (
-                                        imgEl &&
-                                        imgEl.complete &&
-                                        imgEl.naturalWidth > 0
-                                      ) {
-                                        markCastImageLoaded(actor.id);
-                                      }
-                                    }}
                                     onLoad={() => markCastImageLoaded(actor.id)}
                                     onError={() =>
                                       markCastImageFailed(actor.id)

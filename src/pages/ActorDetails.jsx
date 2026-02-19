@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -18,8 +18,6 @@ import {
   FaTwitter,
   FaYoutube,
 } from "react-icons/fa";
-import { MdChevronLeft, MdChevronRight } from "react-icons/md";
-import Slider from "react-slick";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 
@@ -37,26 +35,7 @@ import {
   profileSavedItemPath,
   resolveProfileId,
 } from "../utils/profileFirestorePaths";
-import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
 import { IoMdArrowBack } from "react-icons/io";
-
-const CreditArrow = ({ onClick, direction }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/70 hover:bg-black/90 border border-white/20 flex items-center justify-center ${
-      direction === "left" ? "-left-2 md:-left-4" : "-right-2 md:-right-4"
-    }`}
-    aria-label={direction === "left" ? "Previous credits" : "Next credits"}
-  >
-    {direction === "left" ? (
-      <MdChevronLeft size={22} />
-    ) : (
-      <MdChevronRight size={22} />
-    )}
-  </button>
-);
 
 const ActorDetails = () => {
   const { actorId } = useParams();
@@ -81,6 +60,7 @@ const ActorDetails = () => {
   const [aliasIndex, setAliasIndex] = useState(0);
   const [typedAlias, setTypedAlias] = useState("");
   const [isDeletingAlias, setIsDeletingAlias] = useState(false);
+  const knownForStripRef = useRef(null);
 
   const aliases = useMemo(
     () =>
@@ -436,6 +416,16 @@ const ActorDetails = () => {
         const saved = savedContentMap[key];
         const localStatus = knownForLocalStatusMap[key];
         const localFavourite = knownForLocalFavouriteMap[key];
+        const releaseDate =
+          saved?.releaseDate ?? credit.release_date ?? credit.first_air_date ?? null;
+        const releaseDateObj = releaseDate ? new Date(`${releaseDate}T00:00:00`) : null;
+        const hasValidReleaseDate =
+          Boolean(releaseDateObj) && !Number.isNaN(releaseDateObj.getTime());
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isLikelyUnreleasedMovie =
+          mediaType === "movie" &&
+          (!hasValidReleaseDate || releaseDateObj > today);
 
         return {
           ...credit,
@@ -452,8 +442,13 @@ const ActorDetails = () => {
             credit.poster ??
             null,
           backdrop: saved?.backdrop ?? credit.backdrop_path ?? null,
-          releaseDate:
-            saved?.releaseDate ?? credit.release_date ?? credit.first_air_date ?? null,
+          releaseDate,
+          releaseDateLabel: hasValidReleaseDate
+            ? releaseDate
+            : isLikelyUnreleasedMovie
+              ? "TBA"
+              : null,
+          isUnreleased: isLikelyUnreleasedMovie,
         };
       }),
     [normalizedCredits, savedContentMap, knownForLocalStatusMap, knownForLocalFavouriteMap],
@@ -646,20 +641,14 @@ const ActorDetails = () => {
     });
   }, [actor?.birthday]);
 
-  const sliderSettings = {
-    dots: false,
-    infinite: false,
-    speed: 450,
-    slidesToShow: 5,
-    slidesToScroll: 2,
-    nextArrow: <CreditArrow direction="right" />,
-    prevArrow: <CreditArrow direction="left" />,
-    responsive: [
-      { breakpoint: 1280, settings: { slidesToShow: 4, slidesToScroll: 2 } },
-      { breakpoint: 1024, settings: { slidesToShow: 3, slidesToScroll: 2 } },
-      { breakpoint: 768, settings: { slidesToShow: 2, slidesToScroll: 1 } },
-      { breakpoint: 520, settings: { slidesToShow: 1, slidesToScroll: 1 } },
-    ],
+  const scrollKnownForBy = (direction) => {
+    const container = knownForStripRef.current;
+    if (!container) return;
+    const delta = Math.max(320, Math.floor(container.clientWidth * 0.85));
+    container.scrollBy({
+      left: direction === "left" ? -delta : delta,
+      behavior: "smooth",
+    });
   };
   const canGoBack =
     typeof window !== "undefined" && window.history.length > 1;
@@ -807,7 +796,7 @@ const ActorDetails = () => {
                       Known Credits
                     </p>
                     <p className="text-base font-semibold text-white">
-                      {normalizedCredits.length}
+                      {knownForItems.length}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-black/30 border border-white/10 p-3 min-h-[88px] flex flex-col justify-between">
@@ -868,9 +857,33 @@ const ActorDetails = () => {
             <h2 className="text-xl md:text-2xl font-bold mb-3">Known For</h2>
             {knownForItems.length > 0 ? (
               <div className="px-2 md:px-4 h-full min-h-0">
-                <Slider {...sliderSettings}>
+                <div className="mb-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => scrollKnownForBy("left")}
+                    className="w-9 h-9 rounded-full bg-black/70 hover:bg-black/90 border border-white/20 flex items-center justify-center"
+                    aria-label="Previous credits"
+                  >
+                    <span className="text-lg leading-none">{"<"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollKnownForBy("right")}
+                    className="w-9 h-9 rounded-full bg-black/70 hover:bg-black/90 border border-white/20 flex items-center justify-center"
+                    aria-label="Next credits"
+                  >
+                    <span className="text-lg leading-none">{">"}</span>
+                  </button>
+                </div>
+                <div
+                  ref={knownForStripRef}
+                  className="flex gap-4 overflow-x-auto pb-3 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                >
                   {knownForItems.map((credit) => (
-                    <div key={`${credit.mediaType}:${credit.id}`} className="px-2 pb-2">
+                    <div
+                      key={`${credit.mediaType}:${credit.id}`}
+                      className="shrink-0 w-[210px]"
+                    >
                       <PosterCard
                         item={credit}
                         onStatusChange={handleKnownForStatusChange}
@@ -878,7 +891,7 @@ const ActorDetails = () => {
                       />
                     </div>
                   ))}
-                </Slider>
+                </div>
               </div>
             ) : (
               <div className="text-sm text-white/60">No credits available.</div>

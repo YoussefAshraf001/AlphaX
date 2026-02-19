@@ -21,6 +21,8 @@ import {
 } from "../utils/profileFirestorePaths";
 
 const SavedContentContext = createContext(null);
+const normalizeSavedStatus = (status) =>
+  status === "Watched" ? "Finished" : status;
 
 export const SavedContentProvider = ({ children }) => {
   const { user } = UserAuth();
@@ -148,21 +150,31 @@ export const SavedContentProvider = ({ children }) => {
       };
 
       unsubMovies = onSnapshot(moviesRef, (snap) => {
-        movies = snap.docs.map((d) => ({
-          ...d.data(),
-          id: Number(d.id),
-          mediaType: "movie",
-        }));
+        movies = snap.docs.map((d) => {
+          const data = d.data() || {};
+          const normalizedStatus = normalizeSavedStatus(data.status);
+          return {
+            ...data,
+            status: normalizedStatus,
+            id: Number(d.id),
+            mediaType: "movie",
+          };
+        });
         moviesLoaded = true;
         sync();
       });
 
       unsubShows = onSnapshot(showsRef, (snap) => {
-        shows = snap.docs.map((d) => ({
-          ...d.data(),
-          id: Number(d.id),
-          mediaType: "tv",
-        }));
+        shows = snap.docs.map((d) => {
+          const data = d.data() || {};
+          const normalizedStatus = normalizeSavedStatus(data.status);
+          return {
+            ...data,
+            status: normalizedStatus,
+            id: Number(d.id),
+            mediaType: "tv",
+          };
+        });
         showsLoaded = true;
         sync();
       });

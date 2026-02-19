@@ -50,6 +50,10 @@ const MovieDetails = () => {
   const [status, setStatus] = useState("");
   const [favourite, setFavourite] = useState(false);
   const [userRatingValue, setUserRatingValue] = useState(0);
+  const [savedNotes, setSavedNotes] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isNotesLoading, setIsNotesLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("cast");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
@@ -60,7 +64,7 @@ const MovieDetails = () => {
   const STATUS_ACTIONS = [
     { key: "Want to Watch", label: "Want to Watch" },
     { key: "Watching", label: "Watching" },
-    { key: "Watched", label: "Watched" },
+    { key: "Finished", label: "Finished" },
     { key: "Paused", label: "Paused" },
     { key: "Dropped", label: "Dropped" },
   ];
@@ -97,21 +101,34 @@ const MovieDetails = () => {
   };
 
   useEffect(() => {
-    if (!user?.email || !movie) return;
+    if (!user?.email || !movie) {
+      setIsNotesLoading(false);
+      return;
+    }
 
     const ref = doc(
       db,
       ...profileSavedItemPath(user.email, activeProfileId, "movies", movie.id),
     );
+    setIsNotesLoading(true);
 
     const unsubscribe = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
-        setStatus(snap.data().status);
-        setFavourite(Boolean(snap.data().favourite));
+        const data = snap.data() || {};
+        const normalizedStatus =
+          data.status === "Watched" ? "Finished" : data.status;
+        setStatus(normalizedStatus);
+        setFavourite(Boolean(data.favourite));
+        const notes = String(data.notes || "");
+        setSavedNotes(notes);
+        setNotesDraft(notes);
       } else {
         setStatus(null);
         setFavourite(false);
+        setSavedNotes("");
+        setNotesDraft("");
       }
+      setIsNotesLoading(false);
     });
 
     return () => unsubscribe();
@@ -266,7 +283,7 @@ const MovieDetails = () => {
       });
 
       setLikedActors((prev) => new Set(prev).add(actor.id));
-      toast.success(`"${actor.name}" added to favourites`);
+      toast.success(`${actor.name} added to favourites`);
     } catch {
       toast.error("Failed to save actor");
     }
@@ -289,7 +306,7 @@ const MovieDetails = () => {
         return next;
       });
 
-      toast.success(`"${actor.name}" removed from favourites`);
+      toast.success(`${actor.name} removed from favourites`);
     } catch {
       toast.error("Failed to remove actor");
     }
@@ -341,6 +358,8 @@ const MovieDetails = () => {
         rating: movie.vote_average,
         mediaType: isTV ? "tv" : "movie",
         status: newStatus,
+        notInterested: false,
+        dropReason: null,
         updatedAt: serverTimestamp(),
       };
 
@@ -367,13 +386,18 @@ const MovieDetails = () => {
     try {
       const ref = doc(
         db,
-        ...profileSavedItemPath(user.email, activeProfileId, "movies", movie.id),
+        ...profileSavedItemPath(
+          user.email,
+          activeProfileId,
+          "movies",
+          movie.id,
+        ),
       );
 
       await deleteDoc(ref);
       setStatus(null);
       setFavourite(false);
-      toast.success(`"${movie.title || movie.name}" removed from your list`);
+      toast.success(`${movie.title || movie.name} removed from your list`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to remove from list");
@@ -411,12 +435,18 @@ const MovieDetails = () => {
           mediaType: "movie",
           status: status ?? null,
           favourite: next,
+          notInterested: false,
+          dropReason: null,
           updatedAt: serverTimestamp(),
         },
         { merge: true },
       );
       setFavourite(next);
-      toast.success(next ? "Added to favourites" : "Removed from favourites");
+      toast.success(
+        next
+          ? `${movie.title || movie.name} added to favourites`
+          : `${movie.title || movie.name} removed from favourites`,
+      );
     } catch {
       toast.error("Failed to update favourite");
     }
@@ -458,6 +488,55 @@ const MovieDetails = () => {
       );
     } catch {
       toast.error("Failed to save rating");
+    }
+  };
+
+  const saveNotes = async (nextNotes = notesDraft) => {
+    if (!user?.email || !movie) {
+      toast.error("You need to be logged in!");
+      return;
+    }
+    if (isNotesLoading) return;
+
+    const normalizedNotes = String(nextNotes || "").trim();
+    setIsSavingNotes(true);
+
+    try {
+      const ref = doc(
+        db,
+        ...profileSavedItemPath(
+          user.email,
+          activeProfileId,
+          "movies",
+          movie.id,
+        ),
+      );
+      await setDoc(
+        ref,
+        {
+          id: movie.id,
+          title: movie.title || movie.name,
+          poster: movie.poster_path || null,
+          backdrop: movie.backdrop_path || null,
+          overview: movie.overview || null,
+          runtime: movie.runtime || null,
+          releaseDate: movie.release_date || null,
+          rating: movie.vote_average ?? null,
+          mediaType: "movie",
+          status: status ?? null,
+          favourite: Boolean(favourite),
+          notes: normalizedNotes,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setSavedNotes(normalizedNotes);
+      setNotesDraft(normalizedNotes);
+      toast.success(normalizedNotes ? "Notes saved" : "Notes cleared");
+    } catch {
+      toast.error("Failed to save notes");
+    } finally {
+      setIsSavingNotes(false);
     }
   };
 
@@ -506,10 +585,13 @@ const MovieDetails = () => {
   const CastSlider = {
     dots: false,
     infinite: false,
-    speed: 500,
+    speed: 280,
     slidesToShow: 3,
     slidesToScroll: 3,
     initialSlide: 0,
+    lazyLoad: "ondemand",
+    swipeToSlide: true,
+    waitForAnimate: false,
     nextArrow: <CastArrow direction="right" />,
     prevArrow: <CastArrow direction="left" />,
     responsive: [
@@ -633,8 +715,8 @@ const MovieDetails = () => {
                       isUnreleased
                         ? "bg-black/65 text-white/45 border border-white/30 shadow-lg shadow-black/70 backdrop-blur-sm"
                         : favourite
-                        ? "bg-red-600/95 border border-red-300/60 shadow-lg shadow-red-900/40 backdrop-blur-sm"
-                        : "bg-black/75 border border-white/45 shadow-lg shadow-black/70 backdrop-blur-sm hover:bg-black/90"
+                          ? "bg-red-600/95 border border-red-300/60 shadow-lg shadow-red-900/40 backdrop-blur-sm"
+                          : "bg-black/75 border border-white/45 shadow-lg shadow-black/70 backdrop-blur-sm hover:bg-black/90"
                     }`}
                   >
                     {favourite ? (
@@ -736,10 +818,27 @@ const MovieDetails = () => {
                   </div>
                 </div>
 
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
+                  {STATUS_ACTIONS.map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => saveWithStatus(s.key)}
+                      title={s.label}
+                      className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
+                        status === s.key
+                          ? "bg-red-600 text-white shadow-lg shadow-red-700/30"
+                          : "bg-white/10 hover:bg-white/20 text-neutral-200"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+
                 <PersonalRating
                   ratingType="stars"
                   value={userRatingValue}
-                  starSizeClass="text-3xl"
+                  starSizeClass="text-2xl"
                   onRate={(value) => {
                     setUserRatingValue(value);
                     savePersonalRating(value);
@@ -757,26 +856,50 @@ const MovieDetails = () => {
                   }
                 />
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {STATUS_ACTIONS.map((s) => (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-wide text-neutral-400">
+                      Personal Notes
+                    </p>
+                    {savedNotes && (
+                      <button
+                        onClick={() => saveNotes("")}
+                        disabled={
+                          !user?.email || isSavingNotes || isNotesLoading
+                        }
+                        className="text-[11px] px-2 py-1 rounded-full border border-white/20 bg-white/10 text-white/80 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    disabled={!user?.email || isSavingNotes || isNotesLoading}
+                    rows={3}
+                    placeholder="Add your thoughts, reminders, or watch notes..."
+                    className="mt-2 w-full min-h-[50px] max-h-[200px] rounded-lg border border-transparent bg-black/40 px-3 py-2 text-sm text-white placeholder-white/45 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                  <div className="mt-2 flex justify-end">
                     <button
-                      key={s.key}
-                      onClick={() => saveWithStatus(s.key)}
-                      title={s.label}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
-                        status === s.key
-                          ? "bg-red-600 text-white shadow-lg shadow-red-700/30"
-                          : "bg-white/10 hover:bg-white/20 text-neutral-200"
-                      }`}
+                      onClick={() => saveNotes(notesDraft)}
+                      disabled={
+                        !user?.email ||
+                        isSavingNotes ||
+                        isNotesLoading ||
+                        notesDraft === savedNotes
+                      }
+                      className="px-3 py-1.5 rounded-md text-xs font-semibold border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {s.label}
+                      {isNotesLoading
+                        ? "Loading..."
+                        : isSavingNotes
+                          ? "Saving..."
+                          : "Save Notes"}
                     </button>
-                  ))}
+                  </div>
                 </div>
-                <p className="text-xs text-white/55 flex items-center gap-1">
-                  <span aria-hidden="true">↓</span>
-                  Cast, reviews, screenshots, and awards are below
-                </p>
               </div>
             </div>
           </div>
@@ -848,13 +971,9 @@ const MovieDetails = () => {
                           : null;
                         const isImageLoaded = !!loadedCastImages[actor.id];
                         return (
-                          <motion.div
+                          <div
                             key={actor._castKey || actor.id}
                             className="flex-shrink-0 w-full p-2"
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
                           >
                             <div className="flex items-center bg-[#131313] border border-white/10 rounded-2xl overflow-hidden shadow-xl relative">
                               <div className="w-24 h-36 relative bg-neutral-800 overflow-hidden">
@@ -871,15 +990,6 @@ const MovieDetails = () => {
                                       src={profileSrc}
                                       alt={actor.name}
                                       loading="lazy"
-                                      ref={(imgEl) => {
-                                        if (
-                                          imgEl &&
-                                          imgEl.complete &&
-                                          imgEl.naturalWidth > 0
-                                        ) {
-                                          markCastImageLoaded(actor.id);
-                                        }
-                                      }}
                                       onLoad={() =>
                                         markCastImageLoaded(actor.id)
                                       }
@@ -928,7 +1038,7 @@ const MovieDetails = () => {
                               as{" "}
                               {actor.character ? `${actor.character}` : "TBA"}
                             </span>
-                          </motion.div>
+                          </div>
                         );
                       })}
                     </Slider>

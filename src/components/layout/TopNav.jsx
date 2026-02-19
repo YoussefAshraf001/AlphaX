@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoMdLogOut, IoMdClose } from "react-icons/io";
@@ -10,6 +10,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import NotFoundPlaceholder from "../../assets/notFound-Placeholder.jpg";
+import {
+  addRecentSearch,
+  clearRecentSearches,
+  getRecentSearches,
+} from "../../utils/recentSearches";
 
 const ConfirmLogoutModal = ({ open, onConfirm, onCancel }) => {
   return (
@@ -96,10 +101,13 @@ const TopNav = () => {
   const { user, logOut } = UserAuth();
   const { clearSelectedProfile, selectedProfile } = useProfile();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -137,6 +145,10 @@ const TopNav = () => {
   }, [accountOpen]);
 
   useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
+
+  useEffect(() => {
     if (!accountOpen) return;
 
     const esc = (e) => e.key === "Escape" && setAccountOpen(false);
@@ -149,6 +161,28 @@ const TopNav = () => {
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
   };
+
+  const resetSearch = useCallback(() => {
+    searchReqRef.current += 1;
+    setSearchQuery("");
+    setSearchResults([]);
+    setIsSearching(false);
+  }, []);
+
+  const openSearchPage = useCallback(() => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    setRecentSearches(addRecentSearch(query));
+    resetSearch();
+    setSearchFocused(false);
+    navigate(`/search?q=${encodeURIComponent(query)}`);
+  }, [navigate, resetSearch, searchQuery]);
+
+  useEffect(() => {
+    resetSearch();
+    setSearchFocused(false);
+    setRecentSearches(getRecentSearches());
+  }, [location.pathname, location.search, resetSearch]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -217,7 +251,7 @@ const TopNav = () => {
 
             {/* NAV (md+) */}
             {user && (
-              <nav className="hidden md:flex items-center gap-6 text-sm text-neutral-300">
+              <nav className="hidden lg:flex items-center gap-6 text-sm text-neutral-300">
                 <Link
                   to="/for-you"
                   className={`px-3 py-1 rounded-full border transition ${
@@ -252,38 +286,100 @@ const TopNav = () => {
 
           {/* CENTER SEARCH (lg+) */}
           {user && (
-            <div className="relative hidden lg:flex items-center">
+            <div className="relative hidden xl:flex items-center">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={handleSearch}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => {
+                  window.setTimeout(() => setSearchFocused(false), 120);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    openSearchPage();
+                  }
+                }}
                 placeholder="Search movies, series, people"
-                className="bg-neutral-800 text-sm text-white placeholder-neutral-400 rounded-full px-4 py-2 pr-10 w-[320px] focus:outline-none"
+                className="bg-neutral-800 text-sm text-white placeholder-neutral-400 rounded-full px-4 py-2 pr-16 w-[320px] focus:outline-none"
               />
 
+              {searchQuery.trim() && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    resetSearch();
+                    setSearchFocused(true);
+                  }}
+                  className="absolute right-3 text-white/70 hover:text-white transition"
+                  aria-label="Clear search"
+                >
+                  <IoMdClose size={18} />
+                </button>
+              )}
+
               {isSearching && (
-                <ImSpinner2 className="absolute right-3 text-white/70 animate-spin" />
+                <ImSpinner2 className="absolute right-9 text-white/70 animate-spin" />
               )}
 
               {(isSearching ||
                 searchResults.length > 0 ||
-                searchQuery.trim()) && (
+                searchQuery.trim() ||
+                (searchFocused && recentSearches.length > 0)) && (
                 <div className="absolute top-12 left-0 w-full bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl overflow-hidden z-50">
-                  {isSearching && (
-                    <div className="px-4 py-3 text-sm text-white/60 flex items-center gap-2">
-                      <ImSpinner2 className="animate-spin" />
-                      Searching...
-                    </div>
-                  )}
-
-                  {!isSearching && searchResults.length === 0 && (
-                    <div className="px-4 py-3 text-sm text-white/60">
-                      No results found.
-                    </div>
-                  )}
-
-                  {!isSearching && (
-                    <div className="max-h-[320px] overflow-y-auto py-1">
+                  <div className="min-h-[300px] max-h-[360px] flex flex-col">
+                    {isSearching ? (
+                      <div className="flex-1 px-4 py-3 text-sm text-white/70 flex items-center justify-center gap-2">
+                        <ImSpinner2 className="animate-spin" />
+                        Searching...
+                      </div>
+                    ) : (
+                      <motion.div
+                        key={searchQuery.trim() ? "results" : "recent"}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex-1 overflow-y-auto py-1"
+                      >
+                        {searchQuery.trim() && searchResults.length === 0 && (
+                          <div className="px-4 py-3 text-sm text-white/60">
+                            No results found.
+                          </div>
+                        )}
+                      {!searchQuery.trim() && recentSearches.length > 0 && (
+                        <>
+                          <div className="flex items-center justify-between px-3 py-2">
+                            <span className="text-[11px] uppercase tracking-wide text-white/50">
+                              Recent searches
+                            </span>
+                            <button
+                              onClick={() => {
+                                clearRecentSearches();
+                                setRecentSearches([]);
+                              }}
+                              className="text-[11px] text-red-300 hover:text-red-200 transition"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                          {recentSearches.map((term) => (
+                            <button
+                              key={term}
+                              onClick={() => {
+                                setSearchQuery(term);
+                                setRecentSearches(addRecentSearch(term));
+                                setSearchFocused(false);
+                                navigate(`/search?q=${encodeURIComponent(term)}`);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm text-white hover:bg-neutral-800/90 transition"
+                            >
+                              {term}
+                            </button>
+                          ))}
+                        </>
+                      )}
                       {searchResults.map((item, index) => {
                         const image =
                           item.poster_path || item.profile_path
@@ -307,10 +403,7 @@ const TopNav = () => {
                                     ? "shows"
                                     : "person"
                               }/${item.id}`}
-                              onClick={() => {
-                                setSearchQuery("");
-                                setSearchResults([]);
-                              }}
+                              onClick={resetSearch}
                               className="h-12 flex items-center gap-2.5 px-3 hover:bg-neutral-800/90 transition"
                             >
                               {image ? (
@@ -349,15 +442,26 @@ const TopNav = () => {
                           </motion.div>
                         );
                       })}
-                    </div>
-                  )}
+                      </motion.div>
+                    )}
+                    {!isSearching && searchResults.length > 0 && (
+                      <div className="border-t border-white/10 p-2">
+                        <button
+                          onClick={openSearchPage}
+                          className="w-full px-3 py-2 text-center text-[12px] uppercase tracking-wide text-red-200 border border-red-400/35 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                        >
+                          View all results
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           )}
 
           {/* RIGHT (md+) */}
-          <div className="hidden md:flex items-center gap-6 text-sm text-neutral-300 relative">
+          <div className="hidden lg:flex items-center gap-6 text-sm text-neutral-300 relative">
             {user ? (
               <>
                 <motion.button
@@ -479,7 +583,7 @@ const TopNav = () => {
           {/* MOBILE BUTTON */}
           <button
             onClick={() => setMobileOpen(true)}
-            className="md:hidden text-white"
+            className="lg:hidden text-white"
           >
             <GiHamburgerMenu size={26} />
           </button>

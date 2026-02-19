@@ -24,6 +24,7 @@ import ReleaseCalendar from "./pages/ReleaseCalendar.jsx";
 import About from "./pages/About.jsx";
 import ForYou from "./pages/ForYou.jsx";
 import WhoIsWatching from "./pages/WhoIsWatching.jsx";
+import Search from "./pages/Search.jsx";
 
 const RouteShell = ({ children }) => (
   <motion.div
@@ -56,6 +57,7 @@ function App() {
       "/shows": "Series",
       "/watchlist": "Watchlist",
       "/release-calendar": "Release Calendar",
+      "/search": "Search",
       "/about": "About",
       "/help": "Help",
       "/accountsettings": "Account Settings",
@@ -250,6 +252,16 @@ function App() {
                           <AccountSettings />
                         </RouteShell>
                       </ProtectedRoute>
+                    </ProfileRouteGate>
+                }
+              />
+              <Route
+                path="/search"
+                element={
+                    <ProfileRouteGate>
+                      <RouteShell>
+                        <Search />
+                      </RouteShell>
                     </ProfileRouteGate>
                 }
               />

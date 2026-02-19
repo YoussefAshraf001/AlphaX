@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 import { UserAuth } from "../../context/AuthContext";
 import { useProfile } from "../../context/ProfileContext";
 import { useNavigate } from "react-router-dom";
+import { MdChevronLeft, MdChevronRight } from "react-icons/md";
 import {
   profileSavedCollectionPath,
   resolveProfileId,
@@ -13,6 +14,10 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
   const { user, loading } = UserAuth();
   const { selectedProfile, profileLoading } = useProfile();
   const [items, setItems] = useState([]);
+  const [showCarouselControls, setShowCarouselControls] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const sliderRef = useRef(null);
   const navigate = useNavigate();
   const activeProfileId = resolveProfileId(selectedProfile);
 
@@ -83,15 +88,67 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
     };
   }, [user, loading, mediaFilter, activeProfileId, profileLoading]);
 
+  const slideLeft = () => {
+    sliderRef.current?.scrollBy({ left: -620, behavior: "smooth" });
+  };
+
+  const slideRight = () => {
+    sliderRef.current?.scrollBy({ left: 620, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const el = sliderRef.current;
+    if (!el) return undefined;
+
+    const updateControls = () => {
+      const hasOverflow = el.scrollWidth - el.clientWidth > 8;
+      setShowCarouselControls(hasOverflow);
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    };
+
+    updateControls();
+    el.addEventListener("scroll", updateControls);
+    window.addEventListener("resize", updateControls);
+    return () => {
+      el.removeEventListener("scroll", updateControls);
+      window.removeEventListener("resize", updateControls);
+    };
+  }, [items.length]);
+
   if (loading || !items.length) return null;
 
   return (
-    <section className="px-10 mb-10">
+    <section className="px-10 mb-10 relative group">
       <h2 className="text-lg font-semibold mb-4 tracking-wide">
         Continue Watching
       </h2>
 
-      <div className="flex gap-4 overflow-x-scroll scrollbar-hide">
+      {showCarouselControls && (
+        <>
+          <button
+            onClick={slideLeft}
+            disabled={!canScrollLeft}
+            className="hidden md:flex absolute left-7 top-1/2 -translate-y-1/2 z-20 w-10 h-10 items-center justify-center rounded-full bg-black/70 border border-white/20 text-white/85 opacity-0 group-hover:opacity-100 transition hover:bg-black/90 disabled:opacity-0 disabled:pointer-events-none"
+            aria-label="Scroll left"
+          >
+            <MdChevronLeft size={24} />
+          </button>
+          <button
+            onClick={slideRight}
+            disabled={!canScrollRight}
+            className="hidden md:flex absolute right-7 top-1/2 -translate-y-1/2 z-20 w-10 h-10 items-center justify-center rounded-full bg-black/70 border border-white/20 text-white/85 opacity-0 group-hover:opacity-100 transition hover:bg-black/90 disabled:opacity-0 disabled:pointer-events-none"
+            aria-label="Scroll right"
+          >
+            <MdChevronRight size={24} />
+          </button>
+        </>
+      )}
+
+      <div
+        ref={sliderRef}
+        className="flex gap-4 overflow-x-scroll scroll-smooth scrollbar-hide"
+      >
         {items.map((item) => {
           const image =
             item.backdrop ||
@@ -108,7 +165,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
           const computedProgress =
             item.mediaType === "tv" && totalEpisodes > 0
               ? Math.round((clampedWatched / totalEpisodes) * 100)
-              : item.status === "Watched"
+              : item.status === "Finished" || item.status === "Watched"
                 ? 100
                 : 45;
           const progressPercent = Math.max(4, Math.min(computedProgress, 100));
@@ -138,6 +195,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
               className="
                 relative
                 w-[260px] h-[145px]
+                shrink-0
                 rounded-xl overflow-hidden
                 bg-neutral-900
                 group

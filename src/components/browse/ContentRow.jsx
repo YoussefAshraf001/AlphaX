@@ -17,7 +17,8 @@ const STATUS_MAP = {
   want: "Want to Watch",
   "want to watch": "Want to Watch",
   watching: "Watching",
-  watched: "Watched",
+  watched: "Finished",
+  finished: "Finished",
   paused: "Paused",
   dropped: "Dropped",
 };
@@ -78,7 +79,13 @@ const mergeUniqueById = (list) =>
 
 const isUpcomingMoviesUrl = (rawUrl) => rawUrl.includes("/movie/upcoming");
 
-const ContentRow = ({ title, fetchURL, savedItems = [], onStatusChange }) => {
+const ContentRow = ({
+  title,
+  fetchURL,
+  seedItems,
+  savedItems = [],
+  onStatusChange,
+}) => {
   const { user } = UserAuth();
   const { selectedProfile } = useProfile();
   const sliderRef = useRef(null);
@@ -112,6 +119,14 @@ const ContentRow = ({ title, fetchURL, savedItems = [], onStatusChange }) => {
   );
 
   useEffect(() => {
+    if (Array.isArray(seedItems)) {
+      setItems(seedItems);
+      setTotalPages(1);
+      setPage(1);
+      setShowLoadMore(false);
+      return;
+    }
+
     if (!fetchURL) return;
     let cancelled = false;
     setShowLoadMore(false);
@@ -159,7 +174,7 @@ const ContentRow = ({ title, fetchURL, savedItems = [], onStatusChange }) => {
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, fetchURL]);
+  }, [fetchPage, fetchURL, seedItems]);
 
   useEffect(() => {
     const el = sliderRef.current;

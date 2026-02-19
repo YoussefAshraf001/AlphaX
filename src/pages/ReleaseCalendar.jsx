@@ -49,6 +49,7 @@ const ReleaseCalendar = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
   const [monthDirection, setMonthDirection] = useState(0);
+  const [countdownScope, setCountdownScope] = useState("current");
   const activeProfileId = resolveProfileId(selectedProfile);
 
   useEffect(() => {
@@ -190,6 +191,17 @@ const ReleaseCalendar = () => {
   });
 
   const monthDayCount = monthReleaseDates.size;
+  const countdownItems = useMemo(() => {
+    if (countdownScope === "all") return upcoming;
+
+    const y = monthDate.getFullYear();
+    const m = monthDate.getMonth();
+    return upcoming.filter((item) => {
+      const dt = new Date(`${item.releaseDate}T00:00:00`);
+      return dt.getFullYear() === y && dt.getMonth() === m;
+    });
+  }, [upcoming, countdownScope, monthDate]);
+
   const jumpToReleaseDate = (releaseDate) => {
     const dt = new Date(`${releaseDate}T00:00:00`);
     if (Number.isNaN(dt.getTime())) return;
@@ -459,9 +471,35 @@ const ReleaseCalendar = () => {
           </section>
 
           <aside className="lg:col-span-4 rounded-2xl border border-white/10 bg-black/40 p-4 md:p-6 overflow-hidden flex flex-col min-h-0">
-            <h3 className="text-sm uppercase tracking-widest text-white/40 mb-4">
-              Unreleased Countdown
-            </h3>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="text-sm uppercase tracking-widest text-white/40">
+                Unreleased Countdown
+              </h3>
+              <div className="inline-flex rounded-full border border-white/15 bg-black/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => setCountdownScope("current")}
+                  className={`px-3 py-1 text-[11px] rounded-full transition ${
+                    countdownScope === "current"
+                      ? "bg-red-600 text-white"
+                      : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  Current Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCountdownScope("all")}
+                  className={`px-3 py-1 text-[11px] rounded-full transition ${
+                    countdownScope === "all"
+                      ? "bg-red-600 text-white"
+                      : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+            </div>
 
             {!user && (
               <p className="text-sm text-white/50">
@@ -477,9 +515,15 @@ const ReleaseCalendar = () => {
               </p>
             )}
 
-            {!loading && upcoming.length > 0 && (
+            {!loading && upcoming.length > 0 && countdownItems.length === 0 && (
+              <p className="text-sm text-white/50">
+                No unreleased titles in this month.
+              </p>
+            )}
+
+            {!loading && countdownItems.length > 0 && (
               <div className="space-y-3 max-h-[640px] overflow-y-auto pr-1">
-                {upcoming.map((item) => (
+                {countdownItems.map((item) => (
                   <div
                     key={`${item.mediaType}-${item.id}`}
                     className="h-[72px] w-full flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-2"
@@ -508,6 +552,7 @@ const ReleaseCalendar = () => {
                         {item.title || item.name}
                       </button>
                       <p className="text-xs text-white/60 truncate">
+                        {item.mediaType === "tv" ? "TV" : "Movie"} •{" "}
                         {item.releaseDate}
                       </p>
                     </div>

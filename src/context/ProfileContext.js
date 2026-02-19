@@ -10,23 +10,12 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
-  getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
-  writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { UserAuth } from "./AuthContext";
-import {
-  legacyRatingsCollectionPath,
-  legacyLikedActorsCollectionPath,
-  profileRatingItemPath,
-  profileRatingsCollectionPath,
-  profileLikedActorItemPath,
-  profileLikedActorsCollectionPath,
-} from "../utils/profileFirestorePaths";
 
 const ProfileContext = createContext(null);
 
@@ -48,100 +37,6 @@ export const ProfileContextProvider = ({ children }) => {
   const [profiles, setProfiles] = useState([]);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
-
-  const migrateMainLikedActorsIfNeeded = useCallback(async (email) => {
-    if (!email) return;
-    const mainProfileRef = doc(db, "users", email, "profiles", "main");
-    const mainProfileSnap = await getDoc(mainProfileRef);
-    const alreadyMigrated = Boolean(mainProfileSnap.data()?.likedActorsMigratedAt);
-    if (alreadyMigrated) return;
-
-    const mainLikedActorsSnap = await getDocs(
-      collection(db, ...profileLikedActorsCollectionPath(email, "main")),
-    );
-
-    if (!mainLikedActorsSnap.empty) {
-      await setDoc(
-        mainProfileRef,
-        { likedActorsMigratedAt: serverTimestamp(), updatedAt: serverTimestamp() },
-        { merge: true },
-      );
-      return;
-    }
-
-    const legacyLikedActorsSnap = await getDocs(
-      collection(db, ...legacyLikedActorsCollectionPath(email)),
-    );
-
-    const batch = writeBatch(db);
-    legacyLikedActorsSnap.docs.forEach((legacyDoc) => {
-      batch.set(
-        doc(db, ...profileLikedActorItemPath(email, "main", legacyDoc.id)),
-        legacyDoc.data(),
-        { merge: true },
-      );
-    });
-    batch.set(
-      mainProfileRef,
-      {
-        likedActorsMigratedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    await batch.commit();
-  }, []);
-
-  const migrateMainRatingsIfNeeded = useCallback(async (email) => {
-    if (!email) return;
-    const mainProfileRef = doc(db, "users", email, "profiles", "main");
-    const mainProfileSnap = await getDoc(mainProfileRef);
-    const alreadyMigrated = Boolean(mainProfileSnap.data()?.ratingsMigratedAt);
-    if (alreadyMigrated) return;
-
-    const ratingTypes = ["movies", "shows", "actors"];
-    const existingSnaps = await Promise.all(
-      ratingTypes.map((type) =>
-        getDocs(collection(db, ...profileRatingsCollectionPath(email, "main", type))),
-      ),
-    );
-
-    if (existingSnaps.some((snap) => !snap.empty)) {
-      await setDoc(
-        mainProfileRef,
-        { ratingsMigratedAt: serverTimestamp(), updatedAt: serverTimestamp() },
-        { merge: true },
-      );
-      return;
-    }
-
-    const legacySnaps = await Promise.all(
-      ratingTypes.map((type) =>
-        getDocs(collection(db, ...legacyRatingsCollectionPath(email, type))),
-      ),
-    );
-
-    const batch = writeBatch(db);
-    legacySnaps.forEach((snap, idx) => {
-      const type = ratingTypes[idx];
-      snap.docs.forEach((legacyDoc) => {
-        batch.set(
-          doc(db, ...profileRatingItemPath(email, "main", type, legacyDoc.id)),
-          legacyDoc.data(),
-          { merge: true },
-        );
-      });
-    });
-    batch.set(
-      mainProfileRef,
-      {
-        ratingsMigratedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    await batch.commit();
-  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -205,8 +100,6 @@ export const ProfileContextProvider = ({ children }) => {
           });
 
         setProfiles(nextProfiles);
-        await migrateMainLikedActorsIfNeeded(user.email);
-        await migrateMainRatingsIfNeeded(user.email);
 
         const selectedId = localStorage.getItem(selectedKey);
         const selected = nextProfiles.find((p) => p.id === selectedId) || null;
@@ -221,7 +114,7 @@ export const ProfileContextProvider = ({ children }) => {
     );
 
     return () => unsub();
-  }, [user, loading, migrateMainLikedActorsIfNeeded, migrateMainRatingsIfNeeded]);
+  }, [user, loading]);
 
   const selectProfile = useCallback((profile) => {
     const email = user?.email || auth.currentUser?.email;

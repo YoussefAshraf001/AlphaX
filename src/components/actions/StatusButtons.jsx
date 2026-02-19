@@ -21,7 +21,7 @@ const STATUS_CONFIG = {
   Watching: {
     icon: FaPlay,
   },
-  Watched: {
+  Finished: {
     icon: FaCheck,
   },
   Paused: {
@@ -31,6 +31,9 @@ const STATUS_CONFIG = {
     icon: FaCheck,
   },
 };
+
+const normalizeSavedStatus = (status) =>
+  status === "Watched" ? "Finished" : status;
 
 const StatusButtons = ({ item }) => {
   const { user } = UserAuth();
@@ -64,7 +67,7 @@ const StatusButtons = ({ item }) => {
       try {
         const snap = await getDoc(ref);
         if (snap.exists()) {
-          setCurrentStatus(snap.data().status);
+          setCurrentStatus(normalizeSavedStatus(snap.data().status));
         } else {
           setCurrentStatus(null);
         }

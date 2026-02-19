@@ -41,10 +41,12 @@ import {
 const STATUSES = [
   { key: "Want to Watch", icon: <IoAdd size={18} /> },
   { key: "Watching", icon: <FaPlay size={12} /> },
-  { key: "Watched", icon: <MdDoneOutline size={14} /> },
+  { key: "Finished", icon: <MdDoneOutline size={14} /> },
   { key: "Paused", icon: <IoIosPause size={14} /> },
   { key: "Dropped", icon: <IoIosClose size={18} /> },
 ];
+
+const ITEMS_PER_PAGE = 24;
 
 const EMOJI_SCALE = [
   "\uD83D\uDE21",
@@ -53,6 +55,7 @@ const EMOJI_SCALE = [
   "\uD83D\uDE42",
   "\uD83D\uDE0D",
 ];
+const REACTION_LABELS = ["Hate", "Bad", "Okay", "Good", "Love"];
 
 /* =========================
    MOTION PRESETS
@@ -170,45 +173,6 @@ const SidePanel = ({
                     {actor.name}
                   </span>
                 </button>
-                {(() => {
-                  const actorRating = actorRatingsById?.[String(actor.id)];
-                  const actorRatingValue = Number(actorRating?.value || 0);
-                  const actorRatingLabel =
-                    actorRatingValue > 0
-                      ? EMOJI_SCALE[actorRatingValue - 1]
-                      : "--";
-                  return (
-                    <div className="relative w-12 h-7 shrink-0">
-                      <span
-                        className="
-                          absolute inset-0 flex items-center justify-center
-                          text-[10px] rounded-full border border-white/20 bg-white/10 text-white/75
-                          transition-all duration-200
-                          group-hover:opacity-0 group-hover:translate-x-2
-                        "
-                        title={
-                          actorRatingValue > 0
-                            ? `Actor rating ${actorRatingLabel}`
-                            : "Not rated yet"
-                        }
-                      >
-                        {actorRatingLabel}
-                      </span>
-                      <button
-                        onClick={() => onRemoveActor(actor)}
-                        className="
-                          absolute inset-0 rounded-full flex items-center justify-center
-                          bg-white/10 hover:bg-red-600/80
-                          opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0
-                          transition-all duration-200
-                        "
-                        title="Remove actor"
-                      >
-                        <FaTrash size={11} />
-                      </button>
-                    </div>
-                  );
-                })()}
               </div>
             ))
           ) : (
@@ -450,7 +414,7 @@ const QuickRateModal = ({
               onRate={onRate}
               disabled={disabled || saving}
               disabledLabel="This title is unreleased. Rating unlocks on release."
-              starSizeClass="text-3xl"
+              starSizeClass="text-2xl"
               className="bg-white/[0.03]"
             />
 
@@ -681,6 +645,7 @@ const Account = () => {
   const [mediaFilter, setMediaFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortFilter, setSortFilter] = useState("recent");
+  const [pageBySection, setPageBySection] = useState({});
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState(null);
   const [removeConfirm, setRemoveConfirm] = useState(null);
@@ -698,6 +663,9 @@ const Account = () => {
   const [actorImageUploadPreview, setActorImageUploadPreview] = useState("");
   const [actorImageLinkPreviewError, setActorImageLinkPreviewError] =
     useState(false);
+  const [actorHoverValueById, setActorHoverValueById] = useState({});
+  const [loadedPosterKeys, setLoadedPosterKeys] = useState({});
+  const [failedPosterKeys, setFailedPosterKeys] = useState({});
   const [wantWatchSections, setWantWatchSections] = useState({
     movieReleased: true,
     movieUnreleased: true,
@@ -714,6 +682,20 @@ const Account = () => {
     if (/^https?:\/\//i.test(raw) || raw.startsWith("data:image/")) return raw;
     if (raw.startsWith("/")) return `https://image.tmdb.org/t/p/${size}${raw}`;
     return `https://image.tmdb.org/t/p/${size}/${raw}`;
+  };
+
+  const markPosterLoaded = (posterKey) => {
+    if (!posterKey) return;
+    setLoadedPosterKeys((prev) =>
+      prev[posterKey] ? prev : { ...prev, [posterKey]: true },
+    );
+  };
+
+  const markPosterFailed = (posterKey) => {
+    if (!posterKey) return;
+    setFailedPosterKeys((prev) =>
+      prev[posterKey] ? prev : { ...prev, [posterKey]: true },
+    );
   };
 
   /* =========================
@@ -809,13 +791,25 @@ const Account = () => {
       };
 
       const unsubMovies = onSnapshot(moviesRef, (snap) => {
-        movies = snap.docs.map((d) => d.data());
+        movies = snap.docs.map((d) => {
+          const data = d.data() || {};
+          return {
+            ...data,
+            status: data.status === "Watched" ? "Finished" : data.status,
+          };
+        });
         moviesReady = true;
         sync();
       });
 
       const unsubTv = onSnapshot(tvRef, (snap) => {
-        tv = snap.docs.map((d) => d.data());
+        tv = snap.docs.map((d) => {
+          const data = d.data() || {};
+          return {
+            ...data,
+            status: data.status === "Watched" ? "Finished" : data.status,
+          };
+        });
         tvReady = true;
         sync();
       });
@@ -872,7 +866,16 @@ const Account = () => {
     const oldStatus = item.status;
 
     setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, status } : i)),
+      prev.map((i) =>
+        i.id === item.id
+          ? {
+              ...i,
+              status,
+              notInterested: false,
+              dropReason: "",
+            }
+          : i,
+      ),
     );
 
     const ref = doc(
@@ -885,7 +888,15 @@ const Account = () => {
       ),
     );
 
-    await setDoc(ref, { status }, { merge: true });
+    await setDoc(
+      ref,
+      {
+        status,
+        notInterested: false,
+        dropReason: null,
+      },
+      { merge: true },
+    );
 
     setToast(`${item.title} â€” ${oldStatus} â†’ ${status}`);
     setTimeout(() => setToast(null), 3000);
@@ -1230,6 +1241,54 @@ const Account = () => {
     });
   };
 
+  const saveActorRating = async (actor, nextValue) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser?.email || !actor) return;
+    const normalized = Math.max(1, Math.min(5, Number(nextValue) || 0));
+    const ref = doc(
+      db,
+      ...profileRatingItemPath(currentUser.email, activeProfileId, "actors", actor.id),
+    );
+    try {
+      await setDoc(
+        ref,
+        {
+          id: Number(actor.id),
+          title: actor.name || actorRatingsById?.[String(actor.id)]?.title || "",
+          image:
+            actor.image ||
+            actorRatingsById?.[String(actor.id)]?.image ||
+            actor.profile_path ||
+            null,
+          mediaType: "person",
+          mode: "emoji",
+          value: normalized,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setActorRatingsById((prev) => ({
+        ...prev,
+        [String(actor.id)]: {
+          ...(prev[String(actor.id)] || {}),
+          id: Number(actor.id),
+          title: actor.name || prev[String(actor.id)]?.title || "",
+          image:
+            actor.image ||
+            prev[String(actor.id)]?.image ||
+            actor.profile_path ||
+            null,
+          mediaType: "person",
+          mode: "emoji",
+          value: normalized,
+        },
+      }));
+    } catch {
+      setToast("Failed to save actor reaction");
+      setTimeout(() => setToast(null), 2500);
+    }
+  };
+
   const closeQuickRate = () => setQuickRate(null);
 
   const saveQuickRate = async (nextValue = null) => {
@@ -1284,6 +1343,14 @@ const Account = () => {
               }
             : entry,
         ),
+      );
+      setQuickRate((prev) =>
+        prev
+          ? {
+              ...prev,
+              value: clamped,
+            }
+          : prev,
       );
       setToast(clamped > 0 ? "Rating saved" : "Rating cleared");
       setTimeout(() => setToast(null), 2500);
@@ -1470,8 +1537,7 @@ const Account = () => {
     .sort((a, b) => {
       if (b.value !== a.value) return b.value - a.value;
       return b.updatedAt - a.updatedAt;
-    })
-    .slice(0, 16);
+    });
 
   useEffect(() => {
     if (!user?.email) return;
@@ -1527,6 +1593,17 @@ const Account = () => {
   const actorsViewEmpty =
     mediaFilter === "actors" && actors.length === 0 && ratedActors.length === 0;
 
+  useEffect(() => {
+    setPageBySection({});
+  }, [mediaFilter, statusFilter, sortFilter, items.length]);
+
+  const setSectionPage = (sectionKey, page) => {
+    setPageBySection((prev) => ({
+      ...prev,
+      [sectionKey]: Math.max(1, page),
+    }));
+  };
+
   const renderGrid = (list) => (
     <motion.div
       variants={gridStagger}
@@ -1543,6 +1620,14 @@ const Account = () => {
           className="group bg-[#111] rounded-lg overflow-hidden relative"
         >
           {(() => {
+            const itemKey = `${item.mediaType}-${item.id}`;
+            const posterSrc = item.poster
+              ? `https://image.tmdb.org/t/p/w342${item.poster}`
+              : "";
+            const posterKey = `${itemKey}-${item.poster || "none"}`;
+            const posterLoaded = Boolean(loadedPosterKeys[posterKey]);
+            const posterFailed = Boolean(failedPosterKeys[posterKey]);
+            const isPosterReady = !posterSrc || posterLoaded || posterFailed;
             const totalEpisodes = Number(item.totalEpisodes || 0);
             const watchedEpisodes = Number(item.watchedEpisodes || 0);
             const clampedWatched = Math.max(
@@ -1558,13 +1643,14 @@ const Account = () => {
                       Math.round((clampedWatched / totalEpisodes) * 100),
                     ),
                   )
-                : item.status === "Watched"
+                : item.status === "Finished" || item.status === "Watched"
                   ? 100
                   : 0;
             const progressLabel =
               item.mediaType === "tv" && item.status === "Want to Watch"
                 ? "Not started yet"
-                : item.mediaType === "tv" && item.status === "Watched"
+                : item.mediaType === "tv" &&
+                    (item.status === "Finished" || item.status === "Watched")
                   ? "Finished Show"
                   : item.mediaType === "tv" &&
                       Number(item.currentSeason || 0) > 0 &&
@@ -1640,10 +1726,8 @@ const Account = () => {
                     <FiRefreshCw size={12} />
                   )}
                 </motion.button>
-                <img
-                  src={`https://image.tmdb.org/t/p/w342${item.poster}`}
-                  alt=""
-                  className="w-full object-cover cursor-pointer"
+                <div
+                  className="relative w-full aspect-[2/3] bg-white/10 cursor-pointer overflow-hidden"
                   onClick={(e) =>
                     openPath(
                       e,
@@ -1663,7 +1747,26 @@ const Account = () => {
                       );
                     }
                   }}
-                />
+                >
+                  {!isPosterReady && (
+                    <div className="absolute inset-0 bg-white/10 animate-pulse" />
+                  )}
+                  {posterSrc && !posterFailed ? (
+                    <img
+                      src={posterSrc}
+                      alt=""
+                      onLoad={() => markPosterLoaded(posterKey)}
+                      onError={() => markPosterFailed(posterKey)}
+                      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
+                        isPosterReady ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-white/45">
+                      <FiImage size={22} />
+                    </div>
+                  )}
+                </div>
 
                 <div className="p-3 space-y-2 min-h-[128px]">
                   <h3
@@ -1707,7 +1810,8 @@ const Account = () => {
                     <div className="space-y-1">
                       <p className="text-[11px] text-white/70">
                         {progressLabel ||
-                          (item.status === "Watched"
+                          (item.status === "Finished" ||
+                          item.status === "Watched"
                             ? "Finished Show"
                             : "No episode progress")}
                       </p>
@@ -1750,6 +1854,63 @@ const Account = () => {
     </motion.div>
   );
 
+  const renderPaginationControls = (sectionKey, currentPage, totalPages) => {
+    if (totalPages <= 1) return null;
+    return (
+      <div className="mt-3 flex items-center justify-center gap-3">
+        <button
+          onClick={() => setSectionPage(sectionKey, currentPage - 1)}
+          disabled={currentPage <= 1}
+          className="px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Prev
+        </button>
+        <span className="text-xs text-white/55">
+          Page {currentPage} / {totalPages}
+        </span>
+        <button
+          onClick={() => setSectionPage(sectionKey, currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          className="px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next
+        </button>
+      </div>
+    );
+  };
+
+  const renderPagedGrid = (list, sectionKey) => {
+    const totalPages = Math.max(1, Math.ceil(list.length / ITEMS_PER_PAGE));
+    const currentPage = Math.min(pageBySection[sectionKey] || 1, totalPages);
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const pageItems = list.slice(start, start + ITEMS_PER_PAGE);
+
+    return (
+      <>
+        {renderPaginationControls(sectionKey, currentPage, totalPages)}
+        {renderGrid(pageItems)}
+      </>
+    );
+  };
+
+  const renderPagedActorGrid = (
+    list,
+    sectionKey,
+    { showRemove = false, showRating = false } = {},
+  ) => {
+    const totalPages = Math.max(1, Math.ceil(list.length / ITEMS_PER_PAGE));
+    const currentPage = Math.min(pageBySection[sectionKey] || 1, totalPages);
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const pageItems = list.slice(start, start + ITEMS_PER_PAGE);
+
+    return (
+      <>
+        {renderPaginationControls(sectionKey, currentPage, totalPages)}
+        {renderActorGrid(pageItems, { showRemove, showRating })}
+      </>
+    );
+  };
+
   const renderActorGrid = (
     list,
     { showRemove = false, showRating = false } = {},
@@ -1768,12 +1929,16 @@ const Account = () => {
           );
           const actorReaction =
             actorRatingValue > 0 ? EMOJI_SCALE[actorRatingValue - 1] : "--";
+          const actorReactionLabel =
+            actorRatingValue > 0 ? REACTION_LABELS[actorRatingValue - 1] : "Not rated";
+          const hoverValue = Number(actorHoverValueById[String(actor.id)] || 0);
+          const previewValue = hoverValue > 0 ? hoverValue : actorRatingValue;
           return (
             <motion.div
               key={`actor-${actor.id}`}
               variants={slideUp}
               whileHover={{ y: -4 }}
-              className="group bg-[#111] rounded-lg overflow-hidden relative"
+              className="group relative overflow-hidden rounded-2xl border border-transparent bg-[#101010] shadow-[0_14px_28px_rgba(0,0,0,0.35)]"
             >
               <div className="absolute top-2 left-2 z-10 flex items-center gap-1">
                 <div className="relative">
@@ -1840,13 +2005,8 @@ const Account = () => {
                   <FaTrash size={12} />
                 </motion.button>
               )}
-              <img
-                src={
-                  actorImageSrc ||
-                  "https://placehold.co/300x450/111111/ffffff?text=Actor"
-                }
-                alt=""
-                className="w-full aspect-[2/3] object-cover cursor-pointer"
+              <div
+                className="relative cursor-pointer aspect-[2/3] overflow-hidden"
                 onClick={(e) => openPath(e, `/person/${actor.id}`)}
                 onAuxClick={(e) => {
                   if (e.button === 1) {
@@ -1854,8 +2014,16 @@ const Account = () => {
                     openPath(e, `/person/${actor.id}`);
                   }
                 }}
-              />
-              <div className="p-3 min-h-[70px]">
+              >
+                <img
+                  src={
+                    actorImageSrc ||
+                    "https://placehold.co/300x450/111111/ffffff?text=Actor"
+                  }
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"
+                />
+                <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
                 <button
                   onClick={(e) => openPath(e, `/person/${actor.id}`)}
                   onAuxClick={(e) => {
@@ -1864,16 +2032,64 @@ const Account = () => {
                       openPath(e, `/person/${actor.id}`);
                     }
                   }}
-                  className="text-sm font-medium truncate w-full text-left hover:text-red-400"
+                  className="absolute bottom-3 left-3 right-3 text-[15px] font-semibold tracking-tight text-white text-center truncate hover:text-red-300 transition-colors"
                 >
                   {actor.name}
                 </button>
-                {showRating && (
-                  <p className="text-xs text-white/70 mt-1">
-                    Reaction: {actorReaction}
-                  </p>
-                )}
               </div>
+              {showRating && (
+                <div className="px-3 py-2.5 bg-gradient-to-b from-black/75 to-black/90">
+                  <div className="flex w-full flex-col items-center justify-center gap-1.5">
+                    <div
+                      className="flex items-center justify-center gap-1"
+                      onMouseLeave={() =>
+                        setActorHoverValueById((prev) => ({
+                          ...prev,
+                          [String(actor.id)]: 0,
+                        }))
+                      }
+                    >
+                      {EMOJI_SCALE.map((emoji, idx) => {
+                        const value = idx + 1;
+                        const active = previewValue === value;
+                        const hasSelection = previewValue > 0;
+                        return (
+                          <button
+                            key={`${actor.id}-reaction-${value}`}
+                            type="button"
+                            onMouseEnter={() =>
+                              setActorHoverValueById((prev) => ({
+                                ...prev,
+                                [String(actor.id)]: value,
+                              }))
+                            }
+                            onFocus={() =>
+                              setActorHoverValueById((prev) => ({
+                                ...prev,
+                                [String(actor.id)]: value,
+                              }))
+                            }
+                            onClick={() => saveActorRating(actor, value)}
+                            className={`leading-none transition-all duration-150 ${
+                              active
+                                ? "opacity-100 scale-125"
+                                : hasSelection
+                                  ? "opacity-30 scale-90"
+                                  : "opacity-80 hover:opacity-100 hover:scale-110"
+                            }`}
+                            aria-label={`Set ${actor.name} reaction ${value}`}
+                          >
+                            <span className="text-base">{emoji}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-white/65">
+                      {previewValue > 0 ? REACTION_LABELS[previewValue - 1] : actorReactionLabel}
+                    </span>
+                  </div>
+                </div>
+              )}
             </motion.div>
           );
         })(),
@@ -2082,7 +2298,10 @@ const Account = () => {
                             {wantWatchSections.movieReleased &&
                               (releasedMovieItems.length ? (
                                 <div className="mt-3">
-                                  {renderGrid(releasedMovieItems)}
+                                  {renderPagedGrid(
+                                    releasedMovieItems,
+                                    "movieReleased",
+                                  )}
                                 </div>
                               ) : (
                                 <p className="mt-3 text-xs text-white/40">
@@ -2112,7 +2331,10 @@ const Account = () => {
                             {wantWatchSections.movieUnreleased &&
                               (unreleasedMovieItems.length ? (
                                 <div className="mt-3">
-                                  {renderGrid(unreleasedMovieItems)}
+                                  {renderPagedGrid(
+                                    unreleasedMovieItems,
+                                    "movieUnreleased",
+                                  )}
                                 </div>
                               ) : (
                                 <p className="mt-3 text-xs text-white/40">
@@ -2122,7 +2344,7 @@ const Account = () => {
                           </div>
                         </div>
                       ) : (
-                        renderGrid(movieItems)
+                        renderPagedGrid(movieItems, "movieAll")
                       )
                     ) : (
                       <p className="text-xs text-white/40">No movies found.</p>
@@ -2166,7 +2388,10 @@ const Account = () => {
                             {wantWatchSections.tvReleased &&
                               (releasedShowItems.length ? (
                                 <div className="mt-3">
-                                  {renderGrid(releasedShowItems)}
+                                  {renderPagedGrid(
+                                    releasedShowItems,
+                                    "showReleased",
+                                  )}
                                 </div>
                               ) : (
                                 <p className="mt-3 text-xs text-white/40">
@@ -2196,7 +2421,10 @@ const Account = () => {
                             {wantWatchSections.tvUnreleased &&
                               (unreleasedShowItems.length ? (
                                 <div className="mt-3">
-                                  {renderGrid(unreleasedShowItems)}
+                                  {renderPagedGrid(
+                                    unreleasedShowItems,
+                                    "showUnreleased",
+                                  )}
                                 </div>
                               ) : (
                                 <p className="mt-3 text-xs text-white/40">
@@ -2206,7 +2434,7 @@ const Account = () => {
                           </div>
                         </div>
                       ) : (
-                        renderGrid(showItems)
+                        renderPagedGrid(showItems, "showAll")
                       )
                     ) : (
                       <p className="text-xs text-white/40">No shows found.</p>
@@ -2235,7 +2463,9 @@ const Account = () => {
                         Rated Actors &gt;
                       </h2>
                       {ratedActorsOnly.length ? (
-                        renderActorGrid(ratedActorsOnly, { showRating: true })
+                        renderPagedActorGrid(ratedActorsOnly, "ratedActors", {
+                          showRating: true,
+                        })
                       ) : (
                         <p className="text-xs text-white/40">
                           No additional rated actors found.
