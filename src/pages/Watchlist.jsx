@@ -46,6 +46,12 @@ const STATUSES = [
   { key: "Dropped", icon: <IoIosClose size={18} /> },
 ];
 
+const DEFAULT_FILTERS = {
+  mediaFilter: "all",
+  statusFilter: "all",
+  sortFilter: "recent",
+};
+
 const ITEMS_PER_PAGE = 24;
 
 const EMOJI_SCALE = [
@@ -110,15 +116,7 @@ const SkeletonGrid = ({ count = 16 }) => (
 /* =========================
    SIDE PANEL
 ========================= */
-const SidePanel = ({
-  actors,
-  actorRatingsById,
-  movies,
-  shows,
-  onOpenPath,
-  onRemoveActor,
-  getActorImageSrc,
-}) => {
+const SidePanel = ({ actors, movies, shows, onOpenPath, getActorImageSrc }) => {
   return (
     <motion.aside
       variants={slideUp}
@@ -675,6 +673,39 @@ const Account = () => {
   const [toast, setToast] = useState(null);
   const actorImageHydrationRef = useRef(new Set());
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("libraryFilters");
+      if (!raw) return;
+
+      const saved = JSON.parse(raw);
+
+      if (saved.mediaFilter) setMediaFilter(saved.mediaFilter);
+      if (saved.statusFilter) setStatusFilter(saved.statusFilter);
+      if (saved.sortFilter) setSortFilter(saved.sortFilter);
+    } catch {
+      // ignore corrupt storage
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "libraryFilters",
+      JSON.stringify({
+        mediaFilter,
+        statusFilter,
+        sortFilter,
+      }),
+    );
+  }, [mediaFilter, statusFilter, sortFilter]);
+
+  const clearFilters = () => {
+    setMediaFilter(DEFAULT_FILTERS.mediaFilter);
+    setStatusFilter(DEFAULT_FILTERS.statusFilter);
+    setSortFilter(DEFAULT_FILTERS.sortFilter);
+    localStorage.removeItem("libraryFilters");
+  };
+
   const getActorImageSrc = (actor, size = "w185") => {
     if (!actor) return null;
     const raw = String(actor.image || "").trim();
@@ -935,26 +966,39 @@ const Account = () => {
   };
 
   const removeActor = async (actor) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+    const user = auth.currentUser;
+    if (!user) return;
 
-    try {
-      const ref = doc(
-        db,
-        ...profileLikedActorItemPath(
-          currentUser.email,
-          activeProfileId,
-          actor.id,
-        ),
-      );
-      await deleteDoc(ref);
-      setActors((prev) => prev.filter((a) => a.id !== actor.id));
-      setToast(`Removed "${actor.name}" from favourite actors`);
-      setTimeout(() => setToast(null), 3000);
-    } catch {
-      setToast("Failed to remove actor");
-      setTimeout(() => setToast(null), 3000);
-    }
+    const favRef = doc(
+      db,
+      ...profileLikedActorItemPath(user.email, activeProfileId, actor.id),
+    );
+
+    const ratingRef = doc(
+      db,
+      ...profileRatingItemPath(user.email, activeProfileId, "actors", actor.id),
+    );
+
+    // Move image safely to rating doc BEFORE unfav
+    await setDoc(
+      ratingRef,
+      {
+        id: Number(actor.id),
+        title: actor.name,
+        image: actor.image || null,
+        mediaType: "person",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    // Now remove favourite doc
+    await deleteDoc(favRef);
+
+    setActors((prev) => prev.filter((a) => a.id !== actor.id));
+
+    setToast(`Removed ${actor.name} from favourites`);
+    setTimeout(() => setToast(null), 3000);
   };
 
   const toggleFavourite = async (item) => {
@@ -1096,6 +1140,28 @@ const Account = () => {
     } finally {
       setRefreshingActorImageId(null);
     }
+  };
+
+  const addActorToFavourites = async (actor) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const ref = doc(
+      db,
+      ...profileLikedActorItemPath(user.email, activeProfileId, actor.id),
+    );
+
+    await setDoc(
+      ref,
+      {
+        id: Number(actor.id),
+        name: actor.name,
+        image: actor.image || null,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    setToast(`${actor.name} is now in Favourites`);
   };
 
   const saveActorImage = async (actor, nextImage) => {
@@ -1863,11 +1929,11 @@ const Account = () => {
   const renderPaginationControls = (sectionKey, currentPage, totalPages) => {
     if (totalPages <= 1) return null;
     return (
-      <div className="mt-3 flex items-center justify-center gap-3">
+      <div className="mt-3 mb-5 flex items-center justify-center gap-3">
         <button
           onClick={() => setSectionPage(sectionKey, currentPage - 1)}
           disabled={currentPage <= 1}
-          className="px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-5 py-2 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Prev
         </button>
@@ -1877,7 +1943,7 @@ const Account = () => {
         <button
           onClick={() => setSectionPage(sectionKey, currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-5 py-2 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Next
         </button>
@@ -2000,6 +2066,45 @@ const Account = () => {
                     </span>
                   </motion.button>
                 </div>
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() =>
+                    actor.isFavourite
+                      ? removeActor(actor)
+                      : addActorToFavourites(actor)
+                  }
+                  className={`group/btn h-7 min-w-[1.75rem] px-2 rounded-full
+    flex items-center justify-center overflow-hidden transition-all duration-200
+    opacity-0 pointer-events-none
+    group-hover:opacity-100 group-hover:pointer-events-auto
+    group-focus-within:opacity-100 group-focus-within:pointer-events-auto
+    ${
+      actor.isFavourite
+        ? "bg-red-600 text-white"
+        : "bg-black/60 hover:bg-black/80"
+    }
+    ${
+      savingActorImageId === Number(actor.id) ||
+      refreshingActorImageId === Number(actor.id)
+        ? "bg-black/45 text-white/45 cursor-not-allowed"
+        : ""
+    }
+  `}
+                  title={
+                    actor.isFavourite
+                      ? "Remove from favourites"
+                      : "Add to favourites"
+                  }
+                >
+                  {actor.isFavourite ? (
+                    <FaHeart size={11} />
+                  ) : (
+                    <FaRegHeart size={11} />
+                  )}
+                  <span className="max-w-0 opacity-0 whitespace-nowrap text-[10px] text-white/90 ml-0 group-hover/btn:max-w-[52px] group-hover/btn:opacity-100 group-hover/btn:ml-1 transition-all duration-200">
+                    Favourite
+                  </span>
+                </motion.button>
               </div>
               {showRemove && (
                 <motion.button
@@ -2156,59 +2261,90 @@ const Account = () => {
 
         {/* STATUS FILTER */}
         {mediaFilter !== "actors" && (
-          <div className="flex items-center justify-center px-6 py-3 border-b border-white/10 gap-2 overflow-x-auto">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setStatusFilter("all")}
-              className={`px-3 py-1.5 rounded-full text-sm ${
-                statusFilter === "all"
-                  ? "bg-white text-black"
-                  : "bg-white/5 hover:bg-white/10"
-              }`}
-            >
-              All
-            </motion.button>
-
-            {STATUSES.map((s) => (
+          <div className="flex flex-col items-center justify-center px-6 py-3 border-b border-white/10 gap-2 overflow-x-auto">
+            <div className="flex items-center justify-center">
+              <span
+                className="
+                  px-2.5 py-1 rounded-full
+                  text-[10px] uppercase tracking-wider
+                  bg-white/5 text-white/50
+                "
+              >
+                Status
+              </span>
               <motion.button
                 whileTap={{ scale: 0.95 }}
-                key={s.key}
-                onClick={() => setStatusFilter(s.key)}
-                className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-2 ${
-                  statusFilter === s.key
+                onClick={() => setStatusFilter("all")}
+                className={`px-3 py-1.5 rounded-full text-sm ${
+                  statusFilter === "all"
                     ? "bg-white text-black"
                     : "bg-white/5 hover:bg-white/10"
                 }`}
               >
-                {s.icon}
-                {s.key}
+                All
               </motion.button>
-            ))}
 
-            <span className="h-4 w-px bg-white/20 mx-1" />
-            <span className="text-xs uppercase tracking-wide text-white/45">
-              Sort
-            </span>
-
-            {[
-              { key: "recent", label: "Recent" },
-              { key: "highest_rated", label: "Highest Rated" },
-              { key: "favourites", label: "Favourites" },
-              { key: "title_az", label: "Title A-Z" },
-            ].map((opt) => (
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                key={opt.key}
-                onClick={() => setSortFilter(opt.key)}
-                className={`px-3 py-1.5 rounded-full text-sm ${
-                  sortFilter === opt.key
-                    ? "bg-red-500 text-white"
-                    : "bg-white/5 hover:bg-white/10"
-                }`}
+              {STATUSES.map((s) => (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  key={s.key}
+                  onClick={() => setStatusFilter(s.key)}
+                  className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-2 ${
+                    statusFilter === s.key
+                      ? "bg-white text-black"
+                      : "bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  {s.icon}
+                  {s.key}
+                </motion.button>
+              ))}
+            </div>
+            <div className="flex items-center justify-center">
+              <span
+                className="
+                    px-2.5 py-1 rounded-full
+                    text-[10px] uppercase tracking-wider
+                    bg-white/5 text-white/50
+                  "
               >
-                {opt.label}
-              </motion.button>
-            ))}
+                Sort
+              </span>
+              {[
+                { key: "recent", label: "Recent" },
+                { key: "highest_rated", label: "Highest Rated" },
+                { key: "favourites", label: "Favourites" },
+                { key: "title_az", label: "Title A-Z" },
+              ].map((opt) => (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  key={opt.key}
+                  onClick={() => setSortFilter(opt.key)}
+                  className={`px-3 py-1.5 rounded-full text-sm ${
+                    sortFilter === opt.key
+                      ? "bg-red-500 text-white"
+                      : "bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  {opt.label}
+                </motion.button>
+              ))}
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={clearFilters}
+              className="
+              px-3 py-1.5 rounded-full text-sm
+              border-2 border-red-600
+              bg-white/5 text-white/50
+              hover:bg-red-600 hover:text-white
+              hover:border-white/60
+              transition
+              "
+              title="Reset filters"
+            >
+              Reset Saved Preferences
+            </motion.button>
           </div>
         )}
 
@@ -2456,10 +2592,10 @@ const Account = () => {
                         Favourite Actors &gt;
                       </h2>
                       {actors.length ? (
-                        renderActorGrid(actors, {
-                          showRemove: true,
-                          showRating: true,
-                        })
+                        renderActorGrid(
+                          actors.map((a) => ({ ...a, isFavourite: true })),
+                          { showRemove: true, showRating: true },
+                        )
                       ) : (
                         <p className="text-xs text-white/40">
                           No favourite actors found.
