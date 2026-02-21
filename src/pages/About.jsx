@@ -98,7 +98,7 @@ const About = () => {
               Browse Series
             </Link>
             <Link
-              to="/watchlist"
+              to="/my-list"
               className="rounded-full border border-white/25 bg-white/10 px-5 py-2.5 text-sm font-semibold hover:bg-white hover:text-black transition"
             >
               Open Watchlist

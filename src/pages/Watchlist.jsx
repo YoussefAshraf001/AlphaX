@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { auth, db } from "../firebase";
 import {
@@ -53,6 +53,44 @@ const DEFAULT_FILTERS = {
 };
 
 const ITEMS_PER_PAGE = 24;
+const AUTO_METADATA_REFRESH_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const AUTO_METADATA_REFRESH_BATCH_SIZE = 3;
+
+const getItemReleaseDate = (item) =>
+  item?.releaseDate || item?.release_date || item?.first_air_date || null;
+
+const getTimestampMillis = (value) => {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return Number(value.toMillis()) || 0;
+  if (Number.isFinite(Number(value.seconds))) {
+    return Number(value.seconds) * 1000;
+  }
+  return 0;
+};
+
+const isUnknownReleaseDateValue = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    "n/a",
+    "na",
+    "none",
+    "null",
+    "undefined",
+    "unknown",
+    "tba",
+    "tbd",
+    "coming soon",
+  ].includes(normalized);
+};
+
+const getYearFromReleaseValue = (value) => {
+  const match = String(value || "").match(/\b(19|20)\d{2}\b/);
+  return match ? Number(match[0]) : null;
+};
 
 const EMOJI_SCALE = [
   "\uD83D\uDE21",
@@ -672,6 +710,7 @@ const Account = () => {
   });
   const [toast, setToast] = useState(null);
   const actorImageHydrationRef = useRef(new Set());
+  const autoRefreshAttemptedAtRef = useRef({});
 
   useEffect(() => {
     try {
@@ -1435,100 +1474,110 @@ const Account = () => {
     }
   };
 
-  const refreshSavedMetadata = async (item) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !item) return;
+  const refreshSavedMetadata = useCallback(
+    async (item, options = {}) => {
+      const { silent = false } = options;
+      const currentUser = auth.currentUser;
+      if (!currentUser || !item) return;
 
-    const refreshKey = `${item.mediaType}-${item.id}`;
-    if (refreshingItemKeys[refreshKey]) return;
+      const refreshKey = `${item.mediaType}-${item.id}`;
+      if (refreshingItemKeys[refreshKey]) return;
 
-    const isValidItem =
-      Number(item?.id) > 0 &&
-      (item.mediaType === "movie" || item.mediaType === "tv");
-    if (!isValidItem) {
-      setToast("Nothing to refresh");
-      setTimeout(() => setToast(null), 2500);
-      return;
-    }
+      const isValidItem =
+        Number(item?.id) > 0 &&
+        (item.mediaType === "movie" || item.mediaType === "tv");
+      if (!isValidItem) {
+        if (!silent) {
+          setToast("Nothing to refresh");
+          setTimeout(() => setToast(null), 2500);
+        }
+        return;
+      }
 
-    setRefreshingItemKeys((prev) => ({ ...prev, [refreshKey]: true }));
-    try {
-      const isTv = item.mediaType === "tv";
-      const endpointType = isTv ? "tv" : "movie";
-      const savedTypeDoc = isTv ? "shows" : "movies";
-      const response = await axios.get(
-        `https://api.themoviedb.org/3/${endpointType}/${item.id}`,
-        { params: { api_key: process.env.REACT_APP_TMDB_API_KEY } },
-      );
-      const data = response.data || {};
+      setRefreshingItemKeys((prev) => ({ ...prev, [refreshKey]: true }));
+      try {
+        const isTv = item.mediaType === "tv";
+        const endpointType = isTv ? "tv" : "movie";
+        const savedTypeDoc = isTv ? "shows" : "movies";
+        const response = await axios.get(
+          `https://api.themoviedb.org/3/${endpointType}/${item.id}`,
+          { params: { api_key: process.env.REACT_APP_TMDB_API_KEY } },
+        );
+        const data = response.data || {};
 
-      const payload = isTv
-        ? {
-            title: data.name || item.title || "",
-            poster: data.poster_path ?? item.poster ?? null,
-            backdrop: data.backdrop_path ?? item.backdrop ?? null,
-            overview: data.overview ?? item.overview ?? null,
-            releaseDate: data.first_air_date ?? item.releaseDate ?? null,
-            rating: data.vote_average ?? item.rating ?? null,
-            runtime:
-              (Array.isArray(data.episode_run_time) &&
-                data.episode_run_time.find((v) => Number(v) > 0)) ||
-              item.runtime ||
-              null,
-            totalEpisodes:
-              Number.isFinite(Number(data.number_of_episodes)) &&
-              Number(data.number_of_episodes) > 0
-                ? Number(data.number_of_episodes)
-                : item.totalEpisodes || null,
-            totalSeasons:
-              Number.isFinite(Number(data.number_of_seasons)) &&
-              Number(data.number_of_seasons) > 0
-                ? Number(data.number_of_seasons)
-                : item.totalSeasons || null,
-          }
-        : {
-            title: data.title || item.title || "",
-            poster: data.poster_path ?? item.poster ?? null,
-            backdrop: data.backdrop_path ?? item.backdrop ?? null,
-            overview: data.overview ?? item.overview ?? null,
-            releaseDate: data.release_date ?? item.releaseDate ?? null,
-            rating: data.vote_average ?? item.rating ?? null,
-            runtime:
-              Number.isFinite(Number(data.runtime)) && Number(data.runtime) > 0
-                ? Number(data.runtime)
-                : item.runtime || null,
-          };
+        const payload = isTv
+          ? {
+              title: data.name || item.title || "",
+              poster: data.poster_path ?? item.poster ?? null,
+              backdrop: data.backdrop_path ?? item.backdrop ?? null,
+              overview: data.overview ?? item.overview ?? null,
+              releaseDate: data.first_air_date ?? item.releaseDate ?? null,
+              rating: data.vote_average ?? item.rating ?? null,
+              runtime:
+                (Array.isArray(data.episode_run_time) &&
+                  data.episode_run_time.find((v) => Number(v) > 0)) ||
+                item.runtime ||
+                null,
+              totalEpisodes:
+                Number.isFinite(Number(data.number_of_episodes)) &&
+                Number(data.number_of_episodes) > 0
+                  ? Number(data.number_of_episodes)
+                  : item.totalEpisodes || null,
+              totalSeasons:
+                Number.isFinite(Number(data.number_of_seasons)) &&
+                Number(data.number_of_seasons) > 0
+                  ? Number(data.number_of_seasons)
+                  : item.totalSeasons || null,
+            }
+          : {
+              title: data.title || item.title || "",
+              poster: data.poster_path ?? item.poster ?? null,
+              backdrop: data.backdrop_path ?? item.backdrop ?? null,
+              overview: data.overview ?? item.overview ?? null,
+              releaseDate: data.release_date ?? item.releaseDate ?? null,
+              rating: data.vote_average ?? item.rating ?? null,
+              runtime:
+                Number.isFinite(Number(data.runtime)) && Number(data.runtime) > 0
+                  ? Number(data.runtime)
+                  : item.runtime || null,
+            };
 
-      const ref = doc(
-        db,
-        ...profileSavedItemPath(
-          currentUser.email,
-          activeProfileId,
-          savedTypeDoc,
-          item.id,
-        ),
-      );
-      await setDoc(
-        ref,
-        {
-          ...payload,
-          metadataUpdatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setToast(`Refreshed "${item.title}"`);
-      setTimeout(() => setToast(null), 2500);
-    } catch {
-      setToast(`Failed to refresh "${item.title}"`);
-      setTimeout(() => setToast(null), 2500);
-    } finally {
-      setRefreshingItemKeys((prev) => {
-        const next = { ...prev };
-        delete next[refreshKey];
-        return next;
-      });
-    }
-  };
+        const ref = doc(
+          db,
+          ...profileSavedItemPath(
+            currentUser.email,
+            activeProfileId,
+            savedTypeDoc,
+            item.id,
+          ),
+        );
+        await setDoc(
+          ref,
+          {
+            ...payload,
+            metadataUpdatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        if (!silent) {
+          setToast(`Refreshed "${item.title}"`);
+          setTimeout(() => setToast(null), 2500);
+        }
+      } catch {
+        if (!silent) {
+          setToast(`Failed to refresh "${item.title}"`);
+          setTimeout(() => setToast(null), 2500);
+        }
+      } finally {
+        setRefreshingItemKeys((prev) => {
+          const next = { ...prev };
+          delete next[refreshKey];
+          return next;
+        });
+      }
+    },
+    [activeProfileId, refreshingItemKeys],
+  );
 
   const visible = items.filter((i) => {
     if (mediaFilter === "actors") return false;
@@ -1565,16 +1614,48 @@ const Account = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const getItemReleaseDate = (item) =>
-    item.releaseDate || item.release_date || item.first_air_date || null;
-
   const isUnreleasedItem = (item) => {
     const release = getItemReleaseDate(item);
-    if (!release) return false;
+    if (isUnknownReleaseDateValue(release)) return true;
     const date = new Date(release);
-    if (Number.isNaN(date.getTime())) return false;
+    if (Number.isNaN(date.getTime())) {
+      const releaseYear = getYearFromReleaseValue(release);
+      if (releaseYear !== null) {
+        return releaseYear > today.getFullYear();
+      }
+      return true;
+    }
     return date > today;
   };
+
+  useEffect(() => {
+    if (!user || !items.length) return;
+
+    const now = Date.now();
+    const candidates = items
+      .filter((item) => {
+        if (item.status !== "Want to Watch") return false;
+        if (item.mediaType !== "movie" && item.mediaType !== "tv") return false;
+        if (!isUnknownReleaseDateValue(getItemReleaseDate(item))) return false;
+
+        const refreshKey = `${item.mediaType}-${item.id}`;
+        if (refreshingItemKeys[refreshKey]) return false;
+
+        const lastMetadataUpdateMs = getTimestampMillis(item.metadataUpdatedAt);
+        const lastAttemptMs = Number(autoRefreshAttemptedAtRef.current[refreshKey] || 0);
+        const lastCheckedMs = Math.max(lastMetadataUpdateMs, lastAttemptMs);
+        return now - lastCheckedMs >= AUTO_METADATA_REFRESH_COOLDOWN_MS;
+      })
+      .slice(0, AUTO_METADATA_REFRESH_BATCH_SIZE);
+
+    if (!candidates.length) return;
+
+    candidates.forEach((item) => {
+      const refreshKey = `${item.mediaType}-${item.id}`;
+      autoRefreshAttemptedAtRef.current[refreshKey] = now;
+      refreshSavedMetadata(item, { silent: true });
+    });
+  }, [items, refreshingItemKeys, refreshSavedMetadata, user]);
 
   const movieItems = sortedVisible.filter((i) => i.mediaType === "movie");
   const showItems = sortedVisible.filter((i) => i.mediaType === "tv");

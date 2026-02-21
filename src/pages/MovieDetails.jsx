@@ -60,6 +60,7 @@ const MovieDetails = () => {
   const [loadedCastImages, setLoadedCastImages] = useState({});
   const [failedCastImages, setFailedCastImages] = useState({});
   const [isBackdropReady, setIsBackdropReady] = useState(false);
+  const [isReleaseDateHovered, setIsReleaseDateHovered] = useState(false);
 
   const STATUS_ACTIONS = [
     { key: "Want to Watch", label: "Want to Watch" },
@@ -629,6 +630,20 @@ const MovieDetails = () => {
   const releaseYear = movie.release_date
     ? movie.release_date.substring(0, 4)
     : "N/A";
+  const releaseDateValue = String(movie.release_date || "").trim();
+  const parsedReleaseDate = releaseDateValue
+    ? new Date(`${releaseDateValue}T00:00:00`)
+    : null;
+  const hasValidReleaseDate =
+    parsedReleaseDate instanceof Date &&
+    !Number.isNaN(parsedReleaseDate.getTime());
+  const fullReleaseDate = hasValidReleaseDate
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(parsedReleaseDate)
+    : releaseDateValue || releaseYear;
   const canGoBack = typeof window !== "undefined" && window.history.length > 1;
   const isUnreleased =
     Boolean(movie.release_date) &&
@@ -745,9 +760,38 @@ const MovieDetails = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
-                      {releaseYear}
-                    </span>
+                    <motion.span
+                      layout
+                      onHoverStart={() => setIsReleaseDateHovered(true)}
+                      onHoverEnd={() => setIsReleaseDateHovered(false)}
+                      transition={{ layout: { type: "spring", stiffness: 320, damping: 28 } }}
+                      className="px-3 py-1 rounded-full bg-white/10 text-neutral-200 overflow-hidden whitespace-nowrap inline-flex items-center"
+                    >
+                      <motion.span
+                        initial={false}
+                        animate={{
+                          maxWidth: isReleaseDateHovered && hasValidReleaseDate ? 0 : 56,
+                          opacity: isReleaseDateHovered && hasValidReleaseDate ? 0 : 1,
+                          marginRight:
+                            isReleaseDateHovered && hasValidReleaseDate ? 0 : 0,
+                        }}
+                        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                        className="inline-block overflow-hidden"
+                      >
+                        {releaseYear}
+                      </motion.span>
+                      <motion.span
+                        initial={false}
+                        animate={{
+                          maxWidth: isReleaseDateHovered && hasValidReleaseDate ? 220 : 0,
+                          opacity: isReleaseDateHovered && hasValidReleaseDate ? 1 : 0,
+                        }}
+                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                        className="inline-block overflow-hidden"
+                      >
+                        {fullReleaseDate}
+                      </motion.span>
+                    </motion.span>
                     <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 text-neutral-200">
                       <IoMdTime size={14} className="opacity-80" />
                       {runtimeDisplay}

@@ -73,6 +73,7 @@ const ShowDetails = () => {
   const [loadedCastImages, setLoadedCastImages] = useState({});
   const [failedCastImages, setFailedCastImages] = useState({});
   const [isBackdropReady, setIsBackdropReady] = useState(false);
+  const [isFirstAirDateHovered, setIsFirstAirDateHovered] = useState(false);
   const autoStatusSyncRef = useRef(false);
 
   const CastArrow = ({ onClick, direction }) => (
@@ -775,6 +776,20 @@ const ShowDetails = () => {
   const releaseYear = show.first_air_date
     ? show.first_air_date.substring(0, 4)
     : "N/A";
+  const firstAirDateValue = String(show.first_air_date || "").trim();
+  const parsedFirstAirDate = firstAirDateValue
+    ? new Date(`${firstAirDateValue}T00:00:00`)
+    : null;
+  const hasValidFirstAirDate =
+    parsedFirstAirDate instanceof Date &&
+    !Number.isNaN(parsedFirstAirDate.getTime());
+  const fullFirstAirDate = hasValidFirstAirDate
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(parsedFirstAirDate)
+    : firstAirDateValue || releaseYear;
   const seasonsDisplay =
     typeof show.number_of_seasons === "number"
       ? String(show.number_of_seasons)
@@ -1135,9 +1150,42 @@ const ShowDetails = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
-                      {releaseYear}
-                    </span>
+                    <motion.span
+                      layout
+                      onHoverStart={() => setIsFirstAirDateHovered(true)}
+                      onHoverEnd={() => setIsFirstAirDateHovered(false)}
+                      transition={{ layout: { type: "spring", stiffness: 320, damping: 28 } }}
+                      className="px-3 py-1 rounded-full bg-white/10 text-neutral-200 overflow-hidden whitespace-nowrap inline-flex items-center"
+                    >
+                      <motion.span
+                        initial={false}
+                        animate={{
+                          maxWidth:
+                            isFirstAirDateHovered && hasValidFirstAirDate ? 0 : 56,
+                          opacity:
+                            isFirstAirDateHovered && hasValidFirstAirDate ? 0 : 1,
+                        }}
+                        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                        className="inline-block overflow-hidden"
+                      >
+                        {releaseYear}
+                      </motion.span>
+                      <motion.span
+                        initial={false}
+                        animate={{
+                          maxWidth:
+                            isFirstAirDateHovered && hasValidFirstAirDate
+                              ? 220
+                              : 0,
+                          opacity:
+                            isFirstAirDateHovered && hasValidFirstAirDate ? 1 : 0,
+                        }}
+                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                        className="inline-block overflow-hidden"
+                      >
+                        {fullFirstAirDate}
+                      </motion.span>
+                    </motion.span>
                     <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
                       {seasonsDisplay} seasons
                     </span>

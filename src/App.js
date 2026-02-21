@@ -1,4 +1,4 @@
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Toaster } from "react-hot-toast";
@@ -55,7 +55,8 @@ function App() {
       "/profiles": "Choose Profile",
       "/movies": "Movies",
       "/shows": "Series",
-      "/watchlist": "Watchlist",
+      "/my-list": "My List",
+      "/watchlist": "My List",
       "/release-calendar": "Release Calendar",
       "/search": "Search",
       "/about": "About",
@@ -232,7 +233,7 @@ function App() {
                 }
               />
               <Route
-                path="/watchlist"
+                path="/my-list"
                 element={
                     <ProfileRouteGate>
                       <ProtectedRoute>
@@ -243,6 +244,7 @@ function App() {
                     </ProfileRouteGate>
                 }
               />
+              <Route path="/watchlist" element={<Navigate to="/my-list" replace />} />
               <Route
                 path="/accountSettings"
                 element={

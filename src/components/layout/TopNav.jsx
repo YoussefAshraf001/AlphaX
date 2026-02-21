@@ -121,7 +121,9 @@ const TopNav = () => {
       setAccountAvatar(null);
       return;
     }
-    setAccountAvatar(selectedProfile.avatar || selectedProfile.avatarBase64 || null);
+    setAccountAvatar(
+      selectedProfile.avatar || selectedProfile.avatarBase64 || null,
+    );
   }, [user?.email, selectedProfile]);
 
   useEffect(() => {
@@ -268,8 +270,8 @@ const TopNav = () => {
                 <Link to="/shows" className="hover:text-white">
                   Series
                 </Link>
-                <Link to="/watchlist" className="hover:text-white">
-                  Watchlist
+                <Link to="/my-list" className="hover:text-white">
+                  My List
                 </Link>
                 <Link to="/release-calendar" className="hover:text-white">
                   Release Calendar
@@ -348,100 +350,106 @@ const TopNav = () => {
                             No results found.
                           </div>
                         )}
-                      {!searchQuery.trim() && recentSearches.length > 0 && (
-                        <>
-                          <div className="flex items-center justify-between px-3 py-2">
-                            <span className="text-[11px] uppercase tracking-wide text-white/50">
-                              Recent searches
-                            </span>
-                            <button
-                              onClick={() => {
-                                clearRecentSearches();
-                                setRecentSearches([]);
-                              }}
-                              className="text-[11px] text-red-300 hover:text-red-200 transition"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                          {recentSearches.map((term) => (
-                            <button
-                              key={term}
-                              onClick={() => {
-                                setSearchQuery(term);
-                                setRecentSearches(addRecentSearch(term));
-                                setSearchFocused(false);
-                                navigate(`/search?q=${encodeURIComponent(term)}`);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-white hover:bg-neutral-800/90 transition"
-                            >
-                              {term}
-                            </button>
-                          ))}
-                        </>
-                      )}
-                      {searchResults.map((item, index) => {
-                        const image =
-                          item.poster_path || item.profile_path
-                            ? `https://image.tmdb.org/t/p/w92${
-                                item.poster_path || item.profile_path
-                              }`
-                            : null;
+                        {!searchQuery.trim() && recentSearches.length > 0 && (
+                          <>
+                            <div className="flex items-center justify-between px-3 py-2">
+                              <span className="text-[11px] uppercase tracking-wide text-white/50">
+                                Recent searches
+                              </span>
+                              <button
+                                onClick={() => {
+                                  clearRecentSearches();
+                                  setRecentSearches([]);
+                                }}
+                                className="text-[11px] text-red-300 hover:text-red-200 transition"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            {recentSearches.map((term) => (
+                              <button
+                                key={term}
+                                onClick={() => {
+                                  setSearchQuery(term);
+                                  setRecentSearches(addRecentSearch(term));
+                                  setSearchFocused(false);
+                                  navigate(
+                                    `/search?q=${encodeURIComponent(term)}`,
+                                  );
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-white hover:bg-neutral-800/90 transition"
+                              >
+                                {term}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {searchResults.map((item, index) => {
+                          const image =
+                            item.poster_path || item.profile_path
+                              ? `https://image.tmdb.org/t/p/w92${
+                                  item.poster_path || item.profile_path
+                                }`
+                              : null;
 
-                        return (
-                          <motion.div
-                            key={`${item.mediaType}-${item.id}`}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2, delay: index * 0.025 }}
-                          >
-                            <Link
-                              to={`/${
-                                item.mediaType === "movie"
-                                  ? "movies"
-                                  : item.mediaType === "tv"
-                                    ? "shows"
-                                    : "person"
-                              }/${item.id}`}
-                              onClick={resetSearch}
-                              className="h-12 flex items-center gap-2.5 px-3 hover:bg-neutral-800/90 transition"
+                          return (
+                            <motion.div
+                              key={`${item.mediaType}-${item.id}`}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{
+                                duration: 0.2,
+                                delay: index * 0.025,
+                              }}
                             >
-                              {image ? (
-                                <img
-                                  src={image}
-                                  className="w-7 h-9 object-cover rounded shrink-0"
-                                  alt=""
-                                />
-                              ) : (
-                                <div className="w-7 h-9 bg-neutral-700 rounded shrink-0" />
-                              )}
+                              <Link
+                                to={`/${
+                                  item.mediaType === "movie"
+                                    ? "movies"
+                                    : item.mediaType === "tv"
+                                      ? "shows"
+                                      : "person"
+                                }/${item.id}`}
+                                onClick={resetSearch}
+                                className="h-12 flex items-center gap-2.5 px-3 hover:bg-neutral-800/90 transition"
+                              >
+                                {image ? (
+                                  <img
+                                    src={image}
+                                    className="w-7 h-9 object-cover rounded shrink-0"
+                                    alt=""
+                                  />
+                                ) : (
+                                  <div className="w-7 h-9 bg-neutral-700 rounded shrink-0" />
+                                )}
 
-                              <div className="min-w-0 flex-1">
-                                <span className="block text-[13px] text-white leading-tight truncate">
-                                  {item.title || item.name}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {(item.release_date ||
-                                    item.first_air_date) && (
-                                    <span className="text-[10px] text-neutral-400">
-                                      {(
-                                        item.release_date || item.first_air_date
-                                      ).slice(0, 4)}
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] uppercase text-white/50 border border-white/10 px-1.5 py-0.5 rounded-full">
-                                    {item.mediaType === "movie"
-                                      ? "Movie"
-                                      : item.mediaType === "tv"
-                                        ? "Series"
-                                        : "Person"}
+                                <div className="min-w-0 flex-1">
+                                  <span className="block text-[13px] text-white leading-tight truncate">
+                                    {item.title || item.name}
                                   </span>
+                                  <div className="flex items-center gap-2">
+                                    {(item.release_date ||
+                                      item.first_air_date) && (
+                                      <span className="text-[10px] text-neutral-400">
+                                        {(
+                                          item.release_date ||
+                                          item.first_air_date
+                                        ).slice(0, 4)}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] uppercase text-white/50 border border-white/10 px-1.5 py-0.5 rounded-full">
+                                      {item.mediaType === "movie"
+                                        ? "Movie"
+                                        : item.mediaType === "tv"
+                                          ? "Series"
+                                          : "Person"}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            </Link>
-                          </motion.div>
-                        );
-                      })}
+                              </Link>
+                            </motion.div>
+                          );
+                        })}
                       </motion.div>
                     )}
                     {!isSearching && searchResults.length > 0 && (
@@ -637,8 +645,8 @@ const TopNav = () => {
                   <Link to="/shows" onClick={() => setMobileOpen(false)}>
                     Series
                   </Link>
-                  <Link to="/watchlist" onClick={() => setMobileOpen(false)}>
-                    Watchlist
+                  <Link to="/my-list" onClick={() => setMobileOpen(false)}>
+                    My List
                   </Link>
                   <Link
                     to="/release-calendar"
@@ -664,7 +672,10 @@ const TopNav = () => {
                   >
                     Switch Profile
                   </Link>
-                  <Link to="/accountSettings" onClick={() => setMobileOpen(false)}>
+                  <Link
+                    to="/accountSettings"
+                    onClick={() => setMobileOpen(false)}
+                  >
                     Settings
                   </Link>
                 </nav>
