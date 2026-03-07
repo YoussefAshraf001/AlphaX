@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
 import { IoAdd } from "react-icons/io5";
-import { FaHeart, FaPlay, FaRegHeart } from "react-icons/fa";
+import { FaHeart, FaPlay, FaRegHeart, FaRegStar, FaStar, FaStarHalfAlt } from "react-icons/fa";
 import { IoIosClose, IoIosPause } from "react-icons/io";
 import { MdDoneOutline } from "react-icons/md";
 import { FaTrash } from "react-icons/fa";
@@ -61,7 +61,8 @@ const getItemReleaseDate = (item) =>
 
 const getTimestampMillis = (value) => {
   if (!value) return 0;
-  if (typeof value.toMillis === "function") return Number(value.toMillis()) || 0;
+  if (typeof value.toMillis === "function")
+    return Number(value.toMillis()) || 0;
   if (Number.isFinite(Number(value.seconds))) {
     return Number(value.seconds) * 1000;
   }
@@ -100,6 +101,15 @@ const EMOJI_SCALE = [
   "\uD83D\uDE0D",
 ];
 const REACTION_LABELS = ["Hate", "Bad", "Okay", "Good", "Love"];
+
+const getStarParts = (value) => {
+  const normalized = Math.max(0, Math.min(5, Number(value) || 0));
+  if (normalized <= 0) return null;
+  const full = Math.floor(normalized);
+  const half = normalized - full >= 0.5 ? 1 : 0;
+  const empty = Math.max(0, 5 - full - half);
+  return { full, half, empty };
+};
 
 /* =========================
    MOTION PRESETS
@@ -174,10 +184,7 @@ const SidePanel = ({ actors, movies, shows, onOpenPath, getActorImageSrc }) => {
     >
       <section className="h-[285px] max-h-[285px] border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <h3 className="text-xs uppercase text-white/40">Actors</h3>
-          <span className="text-[10px] uppercase tracking-wide text-white/45">
-            Favourites
-          </span>
+          <h3 className="text-xs uppercase text-white/40">Favourite Actors</h3>
         </div>
 
         <div className="space-y-2 overflow-y-auto flex-1 min-h-0 pr-1">
@@ -1537,7 +1544,8 @@ const Account = () => {
               releaseDate: data.release_date ?? item.releaseDate ?? null,
               rating: data.vote_average ?? item.rating ?? null,
               runtime:
-                Number.isFinite(Number(data.runtime)) && Number(data.runtime) > 0
+                Number.isFinite(Number(data.runtime)) &&
+                Number(data.runtime) > 0
                   ? Number(data.runtime)
                   : item.runtime || null,
             };
@@ -1642,7 +1650,9 @@ const Account = () => {
         if (refreshingItemKeys[refreshKey]) return false;
 
         const lastMetadataUpdateMs = getTimestampMillis(item.metadataUpdatedAt);
-        const lastAttemptMs = Number(autoRefreshAttemptedAtRef.current[refreshKey] || 0);
+        const lastAttemptMs = Number(
+          autoRefreshAttemptedAtRef.current[refreshKey] || 0,
+        );
         const lastCheckedMs = Math.max(lastMetadataUpdateMs, lastAttemptMs);
         return now - lastCheckedMs >= AUTO_METADATA_REFRESH_COOLDOWN_MS;
       })
@@ -1817,9 +1827,7 @@ const Account = () => {
             const userRatingLabel = unreleasedItem
               ? "Rating opens on release"
               : userRatingValue > 0
-                ? `${"★".repeat(userRatingValue)}${"☆".repeat(
-                    5 - userRatingValue,
-                  )}`
+                ? getStarParts(userRatingValue)
                 : "Not rated";
             const ratingButtonLabel = unreleasedItem
               ? userRatingLabel
@@ -1956,7 +1964,26 @@ const Account = () => {
                     }`}
                     title="Quick rate"
                   >
-                    My rating: {ratingButtonLabel}
+                    My rating:{" "}
+                    {unreleasedItem || userRatingValue <= 0 ? (
+                      ratingButtonLabel
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 align-middle">
+                        {Array.from({ length: ratingButtonLabel?.full || 0 }).map(
+                          (_, idx) => (
+                            <FaStar key={`full-${idx}`} size={12} />
+                          ),
+                        )}
+                        {ratingButtonLabel?.half ? (
+                          <FaStarHalfAlt key="half" size={12} />
+                        ) : null}
+                        {Array.from({ length: ratingButtonLabel?.empty || 0 }).map(
+                          (_, idx) => (
+                            <FaRegStar key={`empty-${idx}`} size={12} />
+                          ),
+                        )}
+                      </span>
+                    )}
                   </button>
 
                   {item.mediaType === "tv" && (
@@ -2790,3 +2817,4 @@ const Account = () => {
 };
 
 export default Account;
+

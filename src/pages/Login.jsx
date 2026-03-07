@@ -26,8 +26,8 @@ const Login = () => {
     if (!effectiveUser) return;
 
     hasRedirectedRef.current = true;
-    const fromPath = location.state?.from;
-    navigate(fromPath || "/profiles", { replace: true });
+    const fromPath = location.state?.from || "/";
+    navigate("/profiles", { replace: true, state: { from: fromPath } });
   }, [authLoading, location.state?.from, navigate, user]);
 
   const [email, setEmail] = useState("");
@@ -49,10 +49,13 @@ const Login = () => {
       );
 
       await logIn(email, password);
+      if (typeof auth.authStateReady === "function") {
+        await auth.authStateReady();
+      }
       hasRedirectedRef.current = true;
-      const fromPath = location.state?.from;
-      navigate(fromPath || "/profiles", { replace: true });
-      toast.success("Welcome back 👋");
+      const fromPath = location.state?.from || "/";
+      navigate("/profiles", { replace: true, state: { from: fromPath } });
+      toast.success("Welcome back");
     } catch (err) {
       toast.error(err.message || "Login failed");
     } finally {

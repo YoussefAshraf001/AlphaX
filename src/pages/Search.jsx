@@ -56,6 +56,7 @@ const Search = () => {
   const { selectedProfile } = useProfile();
   const { savedItems } = useSavedContent();
   const activeProfileId = resolveProfileId(selectedProfile);
+  const recentSearchScope = `${user?.email || "guest"}:${selectedProfile?.id || "main"}`;
   const [searchParams] = useSearchParams();
   const query = (searchParams.get("q") || "").trim();
   const [results, setResults] = useState([]);
@@ -69,13 +70,13 @@ const Search = () => {
   const [activeFilter, setActiveFilter] = useState("all");
 
   useEffect(() => {
-    setRecentSearches(getRecentSearches());
-  }, []);
+    setRecentSearches(getRecentSearches(recentSearchScope));
+  }, [recentSearchScope]);
 
   useEffect(() => {
     if (!query) return;
-    setRecentSearches(addRecentSearch(query));
-  }, [query]);
+    setRecentSearches(addRecentSearch(query, undefined, recentSearchScope));
+  }, [query, recentSearchScope]);
 
   useEffect(() => {
     if (!user?.email) {

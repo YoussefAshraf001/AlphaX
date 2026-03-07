@@ -5,6 +5,20 @@ import { GiHamburgerMenu } from "react-icons/gi";
 import { IoMdLogOut, IoMdClose } from "react-icons/io";
 import { MdSettings, MdSwitchAccount } from "react-icons/md";
 import { ImSpinner2 } from "react-icons/im";
+import {
+  FiSearch,
+  FiCompass,
+  FiFilm,
+  FiTv,
+  FiBookmark,
+  FiCalendar,
+  FiInfo,
+  FiHelpCircle,
+  FiUser,
+  FiSettings,
+  FiLogOut,
+  FiArrowRight,
+} from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { UserAuth } from "../../context/AuthContext";
@@ -115,6 +129,7 @@ const TopNav = () => {
   const dropdownRef = useRef(null);
   const accountButtonRef = useRef(null);
   const searchReqRef = useRef(0);
+  const recentSearchScope = `${user?.email || "guest"}:${selectedProfile?.id || "main"}`;
 
   useEffect(() => {
     if (!user?.email || !selectedProfile) {
@@ -147,8 +162,8 @@ const TopNav = () => {
   }, [accountOpen]);
 
   useEffect(() => {
-    setRecentSearches(getRecentSearches());
-  }, []);
+    setRecentSearches(getRecentSearches(recentSearchScope));
+  }, [recentSearchScope]);
 
   useEffect(() => {
     if (!accountOpen) return;
@@ -171,20 +186,29 @@ const TopNav = () => {
     setIsSearching(false);
   }, []);
 
+  const submitSearch = useCallback(
+    (rawQuery, { closeMobile = false } = {}) => {
+      const query = String(rawQuery || "").trim();
+      if (!query) return false;
+      setRecentSearches(addRecentSearch(query, undefined, recentSearchScope));
+      resetSearch();
+      setSearchFocused(false);
+      if (closeMobile) setMobileOpen(false);
+      navigate(`/search?q=${encodeURIComponent(query)}`);
+      return true;
+    },
+    [navigate, recentSearchScope, resetSearch],
+  );
+
   const openSearchPage = useCallback(() => {
-    const query = searchQuery.trim();
-    if (!query) return;
-    setRecentSearches(addRecentSearch(query));
-    resetSearch();
-    setSearchFocused(false);
-    navigate(`/search?q=${encodeURIComponent(query)}`);
-  }, [navigate, resetSearch, searchQuery]);
+    submitSearch(searchQuery);
+  }, [searchQuery, submitSearch]);
 
   useEffect(() => {
     resetSearch();
     setSearchFocused(false);
-    setRecentSearches(getRecentSearches());
-  }, [location.pathname, location.search, resetSearch]);
+    setRecentSearches(getRecentSearches(recentSearchScope));
+  }, [location.pathname, location.search, recentSearchScope, resetSearch]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -240,6 +264,20 @@ const TopNav = () => {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const isPathActive = useCallback(
+    (path) =>
+      location.pathname === path ||
+      (path !== "/" && location.pathname.startsWith(`${path}/`)),
+    [location.pathname],
+  );
+
+  const mobileNavLinkClass = (path) =>
+    `group flex items-center gap-3 rounded-xl border px-3 py-2.5 transition ${
+      isPathActive(path)
+        ? "border-red-400/70 bg-red-500/15 text-white shadow-[0_10px_24px_rgba(239,68,68,0.18)]"
+        : "border-white/10 bg-white/[0.02] text-white/85 hover:bg-white/[0.06] hover:text-white"
+    }`;
 
   return (
     <>
@@ -326,145 +364,141 @@ const TopNav = () => {
                 <ImSpinner2 className="absolute right-9 text-white/70 animate-spin" />
               )}
 
-              {(isSearching ||
-                searchResults.length > 0 ||
-                searchQuery.trim() ||
-                (searchFocused && recentSearches.length > 0)) && (
-                <div className="absolute top-12 left-0 w-full bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl overflow-hidden z-50">
-                  <div className="min-h-[300px] max-h-[360px] flex flex-col">
-                    {isSearching ? (
-                      <div className="flex-1 px-4 py-3 text-sm text-white/70 flex items-center justify-center gap-2">
-                        <ImSpinner2 className="animate-spin" />
-                        Searching...
-                      </div>
-                    ) : (
-                      <motion.div
-                        key={searchQuery.trim() ? "results" : "recent"}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.2 }}
-                        className="flex-1 overflow-y-auto py-1"
-                      >
-                        {searchQuery.trim() && searchResults.length === 0 && (
-                          <div className="px-4 py-3 text-sm text-white/60">
-                            No results found.
-                          </div>
-                        )}
-                        {!searchQuery.trim() && recentSearches.length > 0 && (
-                          <>
-                            <div className="flex items-center justify-between px-3 py-2">
-                              <span className="text-[11px] uppercase tracking-wide text-white/50">
-                                Recent searches
-                              </span>
-                              <button
-                                onClick={() => {
-                                  clearRecentSearches();
-                                  setRecentSearches([]);
-                                }}
-                                className="text-[11px] text-red-300 hover:text-red-200 transition"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                            {recentSearches.map((term) => (
-                              <button
-                                key={term}
-                                onClick={() => {
-                                  setSearchQuery(term);
-                                  setRecentSearches(addRecentSearch(term));
-                                  setSearchFocused(false);
-                                  navigate(
-                                    `/search?q=${encodeURIComponent(term)}`,
-                                  );
-                                }}
-                                className="w-full text-left px-3 py-2 text-sm text-white hover:bg-neutral-800/90 transition"
-                              >
-                                {term}
-                              </button>
-                            ))}
-                          </>
-                        )}
-                        {searchResults.map((item, index) => {
-                          const image =
-                            item.poster_path || item.profile_path
-                              ? `https://image.tmdb.org/t/p/w92${
-                                  item.poster_path || item.profile_path
-                                }`
-                              : null;
-
-                          return (
-                            <motion.div
-                              key={`${item.mediaType}-${item.id}`}
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{
-                                duration: 0.2,
-                                delay: index * 0.025,
-                              }}
-                            >
-                              <Link
-                                to={`/${
-                                  item.mediaType === "movie"
-                                    ? "movies"
-                                    : item.mediaType === "tv"
-                                      ? "shows"
-                                      : "person"
-                                }/${item.id}`}
-                                onClick={resetSearch}
-                                className="h-12 flex items-center gap-2.5 px-3 hover:bg-neutral-800/90 transition"
-                              >
-                                {image ? (
-                                  <img
-                                    src={image}
-                                    className="w-7 h-9 object-cover rounded shrink-0"
-                                    alt=""
-                                  />
-                                ) : (
-                                  <div className="w-7 h-9 bg-neutral-700 rounded shrink-0" />
-                                )}
-
-                                <div className="min-w-0 flex-1">
-                                  <span className="block text-[13px] text-white leading-tight truncate">
-                                    {item.title || item.name}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    {(item.release_date ||
-                                      item.first_air_date) && (
-                                      <span className="text-[10px] text-neutral-400">
-                                        {(
-                                          item.release_date ||
-                                          item.first_air_date
-                                        ).slice(0, 4)}
-                                      </span>
-                                    )}
-                                    <span className="text-[10px] uppercase text-white/50 border border-white/10 px-1.5 py-0.5 rounded-full">
-                                      {item.mediaType === "movie"
-                                        ? "Movie"
-                                        : item.mediaType === "tv"
-                                          ? "Series"
-                                          : "Person"}
-                                    </span>
-                                  </div>
-                                </div>
-                              </Link>
-                            </motion.div>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                    {!isSearching && searchResults.length > 0 && (
-                      <div className="border-t border-white/10 p-2">
-                        <button
-                          onClick={openSearchPage}
-                          className="w-full px-3 py-2 text-center text-[12px] uppercase tracking-wide text-red-200 border border-red-400/35 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+              {searchFocused &&
+                (isSearching ||
+                  searchResults.length > 0 ||
+                  searchQuery.trim() ||
+                  recentSearches.length > 0) && (
+                  <div className="absolute top-12 left-0 w-full bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl overflow-hidden z-50">
+                    <div className="min-h-[300px] max-h-[360px] flex flex-col">
+                      {isSearching ? (
+                        <div className="flex-1 px-4 py-3 text-sm text-white/70 flex items-center justify-center gap-2">
+                          <ImSpinner2 className="animate-spin" />
+                          Searching...
+                        </div>
+                      ) : (
+                        <motion.div
+                          key={searchQuery.trim() ? "results" : "recent"}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className="flex-1 overflow-y-auto py-1"
                         >
-                          View all results
-                        </button>
-                      </div>
-                    )}
+                          {searchQuery.trim() && searchResults.length === 0 && (
+                            <div className="px-4 py-3 text-sm text-white/60">
+                              No results found.
+                            </div>
+                          )}
+                          {!searchQuery.trim() && recentSearches.length > 0 && (
+                            <>
+                              <div className="flex items-center justify-between px-3 py-2">
+                                <span className="text-[11px] uppercase tracking-wide text-white/50">
+                                  Recent searches
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    clearRecentSearches(recentSearchScope);
+                                    setRecentSearches([]);
+                                  }}
+                                  className="text-[11px] text-red-300 hover:text-red-200 transition"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                              {recentSearches.map((term) => (
+                                <button
+                                  key={term}
+                                  onClick={() => {
+                                    submitSearch(term);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm text-white hover:bg-neutral-800/90 transition"
+                                >
+                                  {term}
+                                </button>
+                              ))}
+                            </>
+                          )}
+                          {searchResults.map((item, index) => {
+                            const image =
+                              item.poster_path || item.profile_path
+                                ? `https://image.tmdb.org/t/p/w92${
+                                    item.poster_path || item.profile_path
+                                  }`
+                                : null;
+
+                            return (
+                              <motion.div
+                                key={`${item.mediaType}-${item.id}`}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{
+                                  duration: 0.2,
+                                  delay: index * 0.025,
+                                }}
+                              >
+                                <Link
+                                  to={`/${
+                                    item.mediaType === "movie"
+                                      ? "movies"
+                                      : item.mediaType === "tv"
+                                        ? "shows"
+                                        : "person"
+                                  }/${item.id}`}
+                                  onClick={resetSearch}
+                                  className="h-12 flex items-center gap-2.5 px-3 hover:bg-neutral-800/90 transition"
+                                >
+                                  {image ? (
+                                    <img
+                                      src={image}
+                                      className="w-7 h-9 object-cover rounded shrink-0"
+                                      alt=""
+                                    />
+                                  ) : (
+                                    <div className="w-7 h-9 bg-neutral-700 rounded shrink-0" />
+                                  )}
+
+                                  <div className="min-w-0 flex-1">
+                                    <span className="block text-[13px] text-white leading-tight truncate">
+                                      {item.title || item.name}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      {(item.release_date ||
+                                        item.first_air_date) && (
+                                        <span className="text-[10px] text-neutral-400">
+                                          {(
+                                            item.release_date ||
+                                            item.first_air_date
+                                          ).slice(0, 4)}
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] uppercase text-white/50 border border-white/10 px-1.5 py-0.5 rounded-full">
+                                        {item.mediaType === "movie"
+                                          ? "Movie"
+                                          : item.mediaType === "tv"
+                                            ? "Series"
+                                            : "Person"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </Link>
+                              </motion.div>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                      {!isSearching && searchResults.length > 0 && (
+                        <div className="border-t border-white/10 p-2">
+                          <button
+                            onClick={openSearchPage}
+                            className="w-full px-3 py-2 text-center text-[12px] uppercase tracking-wide text-red-200 border border-red-400/35 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                          >
+                            View all results
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           )}
 
@@ -616,93 +650,236 @@ const TopNav = () => {
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "tween", duration: 0.25 }}
-              className="fixed right-0 top-0 h-full w-72 bg-neutral-900 z-[1000] p-6 flex flex-col"
+              transition={{ type: "spring", stiffness: 280, damping: 30 }}
+              className="fixed right-0 top-0 h-full w-[86vw] max-w-sm z-[1000] flex flex-col bg-gradient-to-b from-[#111214] via-[#0f1013] to-[#0a0b0d] border-l border-white/10 shadow-[-20px_0_70px_rgba(0,0,0,0.55)]"
             >
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="self-end text-white mb-6"
-              >
-                <IoMdClose size={26} />
-              </button>
-
-              {user ? (
-                <nav className="flex flex-col gap-4 text-white">
-                  <Link
-                    to="/for-you"
-                    onClick={() => setMobileOpen(false)}
-                    className={`px-3 py-2 rounded-lg border transition ${
-                      location.pathname === "/for-you"
-                        ? "border-red-500 bg-red-500 text-white"
-                        : "border-white/30 bg-transparent text-white/85"
-                    }`}
-                  >
-                    For You
-                  </Link>
-                  <Link to="/movies" onClick={() => setMobileOpen(false)}>
-                    Movies
-                  </Link>
-                  <Link to="/shows" onClick={() => setMobileOpen(false)}>
-                    Series
-                  </Link>
-                  <Link to="/my-list" onClick={() => setMobileOpen(false)}>
-                    My List
-                  </Link>
-                  <Link
-                    to="/release-calendar"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    Release Calendar
-                  </Link>
-                  <Link to="/about" onClick={() => setMobileOpen(false)}>
-                    About
-                  </Link>
-                  <Link to="/help" onClick={() => setMobileOpen(false)}>
-                    Help
-                  </Link>
-                  <div className="mt-2 border-t border-white/15 pt-3 text-white/70 text-xs uppercase tracking-wide">
-                    Account
+              <div className="px-5 pt-5 pb-4 border-b border-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {user ? (
+                      <>
+                        <img
+                          src={accountAvatar || NotFoundPlaceholder}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = NotFoundPlaceholder;
+                          }}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover border border-white/60"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-wide text-white/50">
+                            Signed in as
+                          </p>
+                          <p className="text-sm text-white font-medium truncate">
+                            {selectedProfile?.name || "Account"}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-white font-medium">Menu</p>
+                        <p className="text-[11px] uppercase tracking-wide text-white/50">
+                          Explore AlphaX
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <Link
-                    to="/profiles"
-                    onClick={() => {
-                      clearSelectedProfile();
-                      setMobileOpen(false);
-                    }}
-                  >
-                    Switch Profile
-                  </Link>
-                  <Link
-                    to="/accountSettings"
+                  <button
                     onClick={() => setMobileOpen(false)}
+                    className="text-white/80 hover:text-white transition"
+                    aria-label="Close menu"
                   >
-                    Settings
-                  </Link>
-                </nav>
-              ) : (
-                <nav className="flex flex-col gap-4 text-white">
-                  <Link to="/about" onClick={() => setMobileOpen(false)}>
-                    About
-                  </Link>
-                  <Link to="/help" onClick={() => setMobileOpen(false)}>
-                    Help
-                  </Link>
-                </nav>
-              )}
+                    <IoMdClose size={26} />
+                  </button>
+                </div>
+              </div>
 
-              <div className="mt-auto">
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                {user && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submitSearch(searchQuery, { closeMobile: true });
+                      }}
+                      className="relative"
+                    >
+                      <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={handleSearch}
+                        placeholder="Search movies, series, people"
+                        className="w-full rounded-xl border border-white/10 bg-black/25 pl-9 pr-10 py-2.5 text-sm text-white placeholder-white/80 focus:outline-none focus:border-red-400/70"
+                      />
+                      {searchQuery.trim() && (
+                        <button
+                          type="button"
+                          onClick={resetSearch}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition p-1"
+                          aria-label="Clear search"
+                        >
+                          <IoMdClose size={18} />
+                        </button>
+                      )}
+                    </form>
+
+                    <div className="mt-3 space-y-1.5 max-h-[20vh] overflow-y-auto overscroll-contain pr-1 [touch-action:pan-y]">
+                      {isSearching ? (
+                        <div className="flex items-center gap-2 text-xs text-white py-1">
+                          <ImSpinner2 className="animate-spin text-white" />
+                          Searching...
+                        </div>
+                      ) : searchQuery.trim() ? (
+                        searchResults.map((item) => (
+                          <Link
+                            key={`mobile-${item.mediaType}-${item.id}`}
+                            to={`/${
+                              item.mediaType === "movie"
+                                ? "movies"
+                                : item.mediaType === "tv"
+                                  ? "shows"
+                                  : "person"
+                            }/${item.id}`}
+                            onClick={() => {
+                              resetSearch();
+                              setMobileOpen(false);
+                            }}
+                            className="flex items-center justify-between rounded-lg px-2.5 py-2 text-sm text-white hover:bg-white/10 transition"
+                          >
+                            <span className="truncate pr-3">
+                              {item.title || item.name}
+                            </span>
+                            <FiArrowRight className="text-white/40 shrink-0" />
+                          </Link>
+                        ))
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+
+                {user ? (
+                  <nav className="space-y-2 text-white">
+                    <Link
+                      to="/for-you"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/for-you")}
+                    >
+                      <FiCompass className="text-base text-white/70 group-hover:text-white transition" />
+                      For You
+                    </Link>
+                    <Link
+                      to="/movies"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/movies")}
+                    >
+                      <FiFilm className="text-base text-white/65 group-hover:text-white transition" />
+                      Movies
+                    </Link>
+                    <Link
+                      to="/shows"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/shows")}
+                    >
+                      <FiTv className="text-base text-white/65 group-hover:text-white transition" />
+                      Series
+                    </Link>
+                    <Link
+                      to="/my-list"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/my-list")}
+                    >
+                      <FiBookmark className="text-base text-white/65 group-hover:text-white transition" />
+                      My List
+                    </Link>
+                    <Link
+                      to="/release-calendar"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/release-calendar")}
+                    >
+                      <FiCalendar className="text-base text-white/65 group-hover:text-white transition" />
+                      Release Calendar
+                    </Link>
+                    <Link
+                      to="/about"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/about")}
+                    >
+                      <FiInfo className="text-base text-white/65 group-hover:text-white transition" />
+                      About
+                    </Link>
+                    <Link
+                      to="/help"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/help")}
+                    >
+                      <FiHelpCircle className="text-base text-white/65 group-hover:text-white transition" />
+                      Help
+                    </Link>
+                    <div className="mt-4 border-t border-white/15 pt-3 text-white/60 text-[11px] uppercase tracking-[0.12em]">
+                      Account
+                    </div>
+                    <Link
+                      to="/profiles"
+                      onClick={() => {
+                        clearSelectedProfile();
+                        setMobileOpen(false);
+                      }}
+                      className={mobileNavLinkClass("/profiles")}
+                    >
+                      <FiUser className="text-base text-white/65 group-hover:text-white transition" />
+                      Switch Profile
+                    </Link>
+                    <Link
+                      to="/accountSettings"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/accountSettings")}
+                    >
+                      <FiSettings className="text-base text-white/65 group-hover:text-white transition" />
+                      Settings
+                    </Link>
+                  </nav>
+                ) : (
+                  <nav className="space-y-2 text-white">
+                    <Link
+                      to="/about"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/about")}
+                    >
+                      <FiInfo className="text-base text-white/65 group-hover:text-white transition" />
+                      About
+                    </Link>
+                    <Link
+                      to="/help"
+                      onClick={() => setMobileOpen(false)}
+                      className={mobileNavLinkClass("/help")}
+                    >
+                      <FiHelpCircle className="text-base text-white/65 group-hover:text-white transition" />
+                      Help
+                    </Link>
+                  </nav>
+                )}
+              </div>
+
+              <div className="px-5 py-4 border-t border-white/10 bg-black/20">
                 {user ? (
                   <button
                     onClick={() => {
                       setMobileOpen(false);
                       setConfirmLogout(true);
                     }}
-                    className="mt-6 text-white"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-400/35 bg-red-500/10 px-4 py-2.5 text-red-200 hover:bg-red-500/20 transition"
                   >
+                    <FiLogOut className="text-base" />
                     Logout
                   </button>
                 ) : (
-                  <Link to="/login" onClick={() => setMobileOpen(false)}>
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="block w-full text-center rounded-xl border border-white/20 bg-white/[0.04] px-4 py-2.5 text-white hover:bg-white/[0.08] transition"
+                  >
                     Sign In
                   </Link>
                 )}

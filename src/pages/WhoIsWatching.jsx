@@ -62,7 +62,14 @@ const WhoIsWatching = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const returnPath = location.state?.from || "/";
+  const requestedPath = location.state?.from;
+  const returnPath =
+    requestedPath &&
+    requestedPath !== "/profiles" &&
+    requestedPath !== "/login" &&
+    requestedPath !== "/signup"
+      ? requestedPath
+      : "/";
   const [manageMode, setManageMode] = useState(false);
   const [editorMode, setEditorMode] = useState("edit");
   const [editingProfile, setEditingProfile] = useState(null);

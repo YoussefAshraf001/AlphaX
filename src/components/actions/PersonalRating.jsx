@@ -1,4 +1,6 @@
 import toast from "react-hot-toast";
+import { FaRegStar, FaStar, FaStarHalfAlt } from "react-icons/fa";
+import { useState } from "react";
 
 const EMOJI_SCALE = [
   "\u{1F621}",
@@ -7,8 +9,6 @@ const EMOJI_SCALE = [
   "\u{1F642}",
   "\u{1F60D}",
 ];
-const STAR_FILLED = "\u2605";
-const STAR_EMPTY = "\u2606";
 
 const PersonalRating = ({
   value = 0,
@@ -23,16 +23,22 @@ const PersonalRating = ({
 }) => {
   const effectiveMode = ratingType === "emoji" ? "emoji" : "stars";
   const normalizedValue = Math.max(0, Math.min(5, Number(value) || 0));
+  const [hoverValue, setHoverValue] = useState(null);
 
   const showLockedToast = () => {
     toast(disabledToastMessage || "Rating unlocks on release");
   };
 
   const renderStars = () => (
-    <div className="flex items-center justify-center gap-1">
+    <div
+      className="flex items-center justify-center gap-1"
+      onMouseLeave={() => setHoverValue(null)}
+    >
       {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => {
         const isEmoji = effectiveMode === "emoji";
-        const isActive = isEmoji ? n === normalizedValue : n <= normalizedValue;
+        const previewValue =
+          !isEmoji && hoverValue != null ? hoverValue : normalizedValue;
+        const isActive = isEmoji ? n === normalizedValue : previewValue >= n - 0.5;
         const hasSelection = normalizedValue > 0;
         const nonSelectedClass =
           hasSelection && !isActive
@@ -41,18 +47,51 @@ const PersonalRating = ({
               : "opacity-35 scale-90"
             : "";
 
+        const starState =
+          previewValue >= n
+            ? "full"
+            : previewValue >= n - 0.5
+              ? "half"
+              : "empty";
+        const savedStarState =
+          normalizedValue >= n
+            ? "full"
+            : normalizedValue >= n - 0.5
+              ? "half"
+              : "empty";
+        const isPreviewOnly =
+          !isEmoji &&
+          hoverValue != null &&
+          starState !== "empty" &&
+          savedStarState !== starState;
+
         return (
           <button
             key={n}
-            onClick={() => {
+            onClick={(event) => {
               if (disabled) {
                 showLockedToast();
                 return;
               }
-              onRate?.(n);
+              if (isEmoji) {
+                onRate?.(n);
+                return;
+              }
+
+              const rect = event.currentTarget.getBoundingClientRect();
+              const isLeftHalf = event.clientX - rect.left < rect.width / 2;
+              const nextValue = isLeftHalf ? n - 0.5 : n;
+              onRate?.(nextValue);
+            }}
+            onMouseMove={(event) => {
+              if (disabled || isEmoji) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              const isLeftHalf = event.clientX - rect.left < rect.width / 2;
+              const nextHover = isLeftHalf ? n - 0.5 : n;
+              setHoverValue((prev) => (prev === nextHover ? prev : nextHover));
             }}
             aria-disabled={disabled}
-            className={`${starSizeClass} leading-none transition duration-200 ${
+            className={`leading-none transition duration-200 ${
               disabled
                 ? "opacity-45 cursor-not-allowed scale-95"
                 : isActive
@@ -60,12 +99,26 @@ const PersonalRating = ({
                   : nonSelectedClass
                     ? nonSelectedClass
                     : "opacity-90 hover:scale-110"
-            } ${!isEmoji && isActive ? "text-yellow-300" : ""} ${
-              !isEmoji && !isActive ? "text-white/40" : ""
             }`}
-            title={`Rate ${n}`}
+            title={isEmoji ? `Rate ${n}` : `Rate ${n - 0.5} to ${n}`}
           >
-            {isEmoji ? EMOJI_SCALE[n - 1] : isActive ? STAR_FILLED : STAR_EMPTY}
+            {isEmoji ? (
+              <span className={starSizeClass}>{EMOJI_SCALE[n - 1]}</span>
+            ) : starState === "full" ? (
+              <FaStar
+                className={`${starSizeClass} ${
+                  isPreviewOnly ? "text-yellow-300/55" : "text-yellow-300"
+                }`}
+              />
+            ) : starState === "half" ? (
+              <FaStarHalfAlt
+                className={`${starSizeClass} ${
+                  isPreviewOnly ? "text-yellow-300/55" : "text-yellow-300"
+                }`}
+              />
+            ) : (
+              <FaRegStar className={`${starSizeClass} text-white/40`} />
+            )}
           </button>
         );
       })}

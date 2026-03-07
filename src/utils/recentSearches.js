@@ -1,5 +1,9 @@
 const RECENT_SEARCHES_KEY = "alphax_recent_searches";
 const DEFAULT_LIMIT = 8;
+const DEFAULT_SCOPE = "global";
+
+const keyForScope = (scope = DEFAULT_SCOPE) =>
+  `${RECENT_SEARCHES_KEY}:${String(scope || DEFAULT_SCOPE)}`;
 
 const normalizeList = (value) => {
   if (!Array.isArray(value)) return [];
@@ -8,9 +12,9 @@ const normalizeList = (value) => {
     .filter(Boolean);
 };
 
-export const getRecentSearches = () => {
+export const getRecentSearches = (scope = DEFAULT_SCOPE) => {
   try {
-    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    const raw = localStorage.getItem(keyForScope(scope));
     if (!raw) return [];
     return normalizeList(JSON.parse(raw));
   } catch {
@@ -18,19 +22,23 @@ export const getRecentSearches = () => {
   }
 };
 
-export const clearRecentSearches = () => {
+export const clearRecentSearches = (scope = DEFAULT_SCOPE) => {
   try {
-    localStorage.removeItem(RECENT_SEARCHES_KEY);
+    localStorage.removeItem(keyForScope(scope));
   } catch {
     // noop
   }
 };
 
-export const addRecentSearch = (term, limit = DEFAULT_LIMIT) => {
+export const addRecentSearch = (
+  term,
+  limit = DEFAULT_LIMIT,
+  scope = DEFAULT_SCOPE,
+) => {
   const query = String(term || "").trim();
-  if (!query) return getRecentSearches();
+  if (!query) return getRecentSearches(scope);
 
-  const current = getRecentSearches();
+  const current = getRecentSearches(scope);
   const normalized = query.toLowerCase();
   const next = [
     query,
@@ -38,7 +46,7 @@ export const addRecentSearch = (term, limit = DEFAULT_LIMIT) => {
   ].slice(0, limit);
 
   try {
-    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+    localStorage.setItem(keyForScope(scope), JSON.stringify(next));
   } catch {
     // noop
   }

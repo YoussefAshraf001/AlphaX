@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { MdChevronLeft, MdChevronRight, MdStarRate } from "react-icons/md";
-import { IoMdArrowBack, IoMdTime } from "react-icons/io";
+import { IoMdArrowBack, IoMdClose, IoMdTime } from "react-icons/io";
 import toast from "react-hot-toast";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
@@ -26,11 +26,14 @@ import NotFoundPlaceholder from "../assets/notFound-Placeholder.jpg";
 import PersonalRating from "../components/actions/PersonalRating";
 import {
   profileRatingItemPath,
+  profileRatingsCollectionPath,
   profileSavedItemPath,
   profileLikedActorItemPath,
   profileLikedActorsCollectionPath,
   resolveProfileId,
 } from "../utils/profileFirestorePaths";
+
+const ACTOR_REACTION_EMOJIS = ["😡", "😕", "😐", "🙂", "😍"];
 
 const MovieDetails = () => {
   const { user } = UserAuth();
@@ -61,6 +64,8 @@ const MovieDetails = () => {
   const [failedCastImages, setFailedCastImages] = useState({});
   const [isBackdropReady, setIsBackdropReady] = useState(false);
   const [isReleaseDateHovered, setIsReleaseDateHovered] = useState(false);
+  const [actorRatingsMap, setActorRatingsMap] = useState({});
+  const [actorActionTarget, setActorActionTarget] = useState(null);
 
   const STATUS_ACTIONS = [
     { key: "Want to Watch", label: "Want to Watch" },
@@ -250,6 +255,29 @@ const MovieDetails = () => {
   }, [user?.email, activeProfileId]);
 
   useEffect(() => {
+    if (!user?.email) {
+      setActorRatingsMap({});
+      return;
+    }
+
+    const ref = collection(
+      db,
+      ...profileRatingsCollectionPath(user.email, activeProfileId, "actors"),
+    );
+
+    const unsubscribe = onSnapshot(ref, (snap) => {
+      const next = {};
+      snap.docs.forEach((entry) => {
+        const data = entry.data() || {};
+        next[Number(data.id || entry.id)] = Number(data.value || 0);
+      });
+      setActorRatingsMap(next);
+    });
+
+    return () => unsubscribe();
+  }, [user?.email, activeProfileId]);
+
+  useEffect(() => {
     setLoadedCastImages({});
     setFailedCastImages({});
   }, [cast]);
@@ -310,6 +338,42 @@ const MovieDetails = () => {
       toast.success(`${actor.name} removed from favourites`);
     } catch {
       toast.error("Failed to remove actor");
+    }
+  };
+
+  const saveActorRating = async (actor, value) => {
+    if (!user?.email || !actor?.id) {
+      toast.error("You need to be logged in!");
+      return;
+    }
+
+    const clamped = Math.max(0, Math.min(5, Number(value) || 0));
+    const ratingRef = doc(
+      db,
+      ...profileRatingItemPath(user.email, activeProfileId, "actors", actor.id),
+    );
+
+    try {
+      if (clamped === 0) {
+        await deleteDoc(ratingRef);
+        return;
+      }
+
+      await setDoc(
+        ratingRef,
+        {
+          id: actor.id,
+          title: actor.name,
+          image: actor.profile_path ?? null,
+          mediaType: "person",
+          mode: "emoji",
+          value: clamped,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } catch {
+      toast.error("Failed to save actor rating");
     }
   };
 
@@ -597,6 +661,13 @@ const MovieDetails = () => {
     prevArrow: <CastArrow direction="left" />,
     responsive: [
       {
+        breakpoint: 1024,
+        settings: {
+          slidesToShow: 2,
+          slidesToScroll: 2,
+        },
+      },
+      {
         breakpoint: 768,
         settings: {
           slidesToShow: 1,
@@ -764,18 +835,28 @@ const MovieDetails = () => {
                       layout
                       onHoverStart={() => setIsReleaseDateHovered(true)}
                       onHoverEnd={() => setIsReleaseDateHovered(false)}
-                      transition={{ layout: { type: "spring", stiffness: 320, damping: 28 } }}
+                      transition={{
+                        layout: { type: "spring", stiffness: 320, damping: 28 },
+                      }}
                       className="px-3 py-1 rounded-full bg-white/10 text-neutral-200 overflow-hidden whitespace-nowrap inline-flex items-center"
                     >
                       <motion.span
                         initial={false}
                         animate={{
-                          maxWidth: isReleaseDateHovered && hasValidReleaseDate ? 0 : 56,
-                          opacity: isReleaseDateHovered && hasValidReleaseDate ? 0 : 1,
+                          maxWidth:
+                            isReleaseDateHovered && hasValidReleaseDate
+                              ? 0
+                              : 56,
+                          opacity:
+                            isReleaseDateHovered && hasValidReleaseDate ? 0 : 1,
                           marginRight:
                             isReleaseDateHovered && hasValidReleaseDate ? 0 : 0,
                         }}
-                        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 360,
+                          damping: 30,
+                        }}
                         className="inline-block overflow-hidden"
                       >
                         {releaseYear}
@@ -783,10 +864,18 @@ const MovieDetails = () => {
                       <motion.span
                         initial={false}
                         animate={{
-                          maxWidth: isReleaseDateHovered && hasValidReleaseDate ? 220 : 0,
-                          opacity: isReleaseDateHovered && hasValidReleaseDate ? 1 : 0,
+                          maxWidth:
+                            isReleaseDateHovered && hasValidReleaseDate
+                              ? 220
+                              : 0,
+                          opacity:
+                            isReleaseDateHovered && hasValidReleaseDate ? 1 : 0,
                         }}
-                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 320,
+                          damping: 28,
+                        }}
                         className="inline-block overflow-hidden"
                       >
                         {fullReleaseDate}
@@ -983,13 +1072,19 @@ const MovieDetails = () => {
             )}
           </AnimatePresence>
 
-          <div className="rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 md:p-6 h-[30vh] min-h-[30vh] max-h-[760px] flex flex-col overflow-hidden">
-            <div className="flex flex-wrap justify-center gap-2 overflow-x-auto">
+          <div
+            className={`rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 md:p-6 max-h-[760px] flex flex-col overflow-hidden ${
+              activeTab === "review"
+                ? "h-[35vh] min-h-[30vh] md:h-[30vh] md:min-h-[30vh]"
+                : "h-auto min-h-[340px] md:h-[30vh] md:min-h-[30vh]"
+            }`}
+          >
+            <div className="flex flex-wrap justify-center gap-2">
               {["cast", "review", "screenshots", "awards"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => handleTabClick(tab)}
-                  className={`py-2 px-4 text-sm rounded-full capitalize transition ${
+                  className={`shrink-0 py-2 px-4 text-sm rounded-full capitalize transition ${
                     activeTab === tab
                       ? "bg-white text-black"
                       : "bg-white/10 hover:bg-white/20 text-white"
@@ -1000,13 +1095,26 @@ const MovieDetails = () => {
               ))}
             </div>
 
-            <div className="mt-6 flex-1 min-h-0 overflow-y-auto pr-1">
+            <div
+              className={`mt-6 flex-1 min-h-0 pr-1 ${
+                activeTab === "cast" ? "overflow-y-hidden" : "overflow-y-auto"
+              }`}
+            >
               {activeTab === "cast" && (
                 <>
                   <div className="relative px-6 md:px-10">
                     <Slider {...CastSlider} key={cast.length}>
                       {cast.map((actor) => {
+                        const actorRating = Number(
+                          actorRatingsMap[actor.id] || 0,
+                        );
                         const isLiked = likedActors.has(actor.id);
+                        const actorReaction =
+                          actorRating > 0
+                            ? ACTOR_REACTION_EMOJIS[
+                                Math.max(0, actorRating - 1)
+                              ]
+                            : "Rate";
                         const canShowImage =
                           Boolean(actor.profile_path) &&
                           !failedCastImages[actor.id];
@@ -1017,10 +1125,10 @@ const MovieDetails = () => {
                         return (
                           <div
                             key={actor._castKey || actor.id}
-                            className="flex-shrink-0 w-full p-2"
+                            className="flex-shrink-0 w-full p-1.5"
                           >
-                            <div className="flex items-center bg-[#131313] border border-white/10 rounded-2xl overflow-hidden shadow-xl relative">
-                              <div className="w-24 h-36 relative bg-neutral-800 overflow-hidden">
+                            <div className="flex items-center bg-[#131313] rounded-2xl overflow-hidden shadow-xl relative">
+                              <div className="w-[88px] h-32 relative bg-neutral-800 overflow-hidden">
                                 {canShowImage ? (
                                   <>
                                     <div
@@ -1064,19 +1172,27 @@ const MovieDetails = () => {
                                   {actor.name}
                                 </Link>
                               </div>
-                              <span className="absolute top-2 right-2">
-                                {isLiked ? (
-                                  <FaHeart
-                                    className="text-red-500 cursor-pointer"
-                                    onClick={() => removeActor(actor)}
-                                  />
-                                ) : (
-                                  <FaRegHeart
-                                    className="text-gray-300 cursor-pointer"
-                                    onClick={() => saveActor(actor)}
-                                  />
-                                )}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActorActionTarget(actor)}
+                                className="absolute top-2 right-2 min-w-[42px] px-2 h-7 rounded-full bg-black/65 border border-white/25 text-[11px] text-white/90 hover:bg-black/85 transition"
+                                title="Rate / Favourite actor"
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  <span>{actorReaction}</span>
+                                  {isLiked ? (
+                                    <>
+                                      <span className="text-white/30 scale-110">
+                                        |
+                                      </span>
+                                      <FaHeart
+                                        className="text-red-500 pt-0.5"
+                                        size={12}
+                                      />
+                                    </>
+                                  ) : null}
+                                </span>
+                              </button>
                             </div>
                             <span className="text-sm text-gray-300 block mt-1">
                               as{" "}
@@ -1211,6 +1327,94 @@ const MovieDetails = () => {
         media={movie}
       />
 
+      <AnimatePresence>
+        {actorActionTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center"
+            onClick={() => setActorActionTarget(null)}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 20, opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-b from-[#171717] to-[#101010] shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
+            >
+              <div className="h-1 bg-gradient-to-r from-red-500/80 via-red-400/50 to-transparent" />
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3 min-w-0">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.25 }}
+                    className="w-11 h-14 rounded-md bg-cover bg-center bg-white/10 shrink-0 border border-white/10"
+                    style={{
+                      backgroundImage: `url(${
+                        actorActionTarget.profile_path
+                          ? `https://image.tmdb.org/t/p/w185/${actorActionTarget.profile_path}`
+                          : NotFoundPlaceholder
+                      })`,
+                    }}
+                  />
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold truncate">
+                        {actorActionTarget.name}
+                      </h3>
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                        Actor Actions
+                      </p>
+                    </div>
+                </div>
+                <button
+                  onClick={() => setActorActionTarget(null)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white flex items-center justify-center transition"
+                  aria-label="Close actor actions"
+                >
+                  <IoMdClose size={17} />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const isLiked = likedActors.has(actorActionTarget.id);
+                  if (isLiked) {
+                    removeActor(actorActionTarget);
+                  } else {
+                    saveActor(actorActionTarget);
+                  }
+                }}
+                className={`mb-4 w-full rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                  likedActors.has(actorActionTarget.id)
+                    ? "border-red-400/60 bg-red-500/15 text-red-200 hover:bg-red-500/25"
+                    : "border-white/20 bg-white/5 text-white/85 hover:bg-white/10"
+                }`}
+              >
+                {likedActors.has(actorActionTarget.id)
+                  ? "Remove Favourite"
+                  : "Add to Favourites"}
+              </button>
+
+              <PersonalRating
+                ratingType="emoji"
+                value={Number(actorRatingsMap[actorActionTarget.id] || 0)}
+                onRate={(value) => saveActorRating(actorActionTarget, value)}
+                modeHint="Rate this actor"
+                disabled={!user?.email}
+                disabledLabel="Sign in to rate actors."
+                disabledToastMessage="Sign in to rate actors."
+              />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {removeConfirmOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#111] p-5">
@@ -1244,3 +1448,4 @@ const MovieDetails = () => {
 };
 
 export default MovieDetails;
+
