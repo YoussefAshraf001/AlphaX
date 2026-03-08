@@ -16,7 +16,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
 import { IoAdd } from "react-icons/io5";
-import { FaHeart, FaPlay, FaRegHeart, FaRegStar, FaStar, FaStarHalfAlt } from "react-icons/fa";
+import {
+  FaHeart,
+  FaPlay,
+  FaRegHeart,
+  FaRegStar,
+  FaStar,
+  FaStarHalfAlt,
+} from "react-icons/fa";
 import { IoIosClose, IoIosPause } from "react-icons/io";
 import { MdDoneOutline } from "react-icons/md";
 import { FaTrash } from "react-icons/fa";
@@ -164,7 +171,16 @@ const SkeletonGrid = ({ count = 16 }) => (
 /* =========================
    SIDE PANEL
 ========================= */
-const SidePanel = ({ actors, movies, shows, onOpenPath, getActorImageSrc }) => {
+const SidePanel = ({
+  actors,
+  movies,
+  shows,
+  actorsLoading,
+  moviesLoading,
+  showsLoading,
+  onOpenPath,
+  getActorImageSrc,
+}) => {
   return (
     <motion.aside
       variants={slideUp}
@@ -175,132 +191,160 @@ const SidePanel = ({ actors, movies, shows, onOpenPath, getActorImageSrc }) => {
         w-80 shrink-0
         border-l border-white/10
         bg-[#0d0d0d]
-        h-[calc(100vh-5.5rem)]
-        overflow-y-auto
-        px-4 py-4
-        mt-16
-        space-y-4
+        h-screen
+        overflow-hidden
+        pt-16
       "
     >
-      <section className="h-[285px] max-h-[285px] border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h3 className="text-xs uppercase text-white/40">Favourite Actors</h3>
-        </div>
+      <div className="h-full min-h-0 px-4 py-4 grid grid-rows-3 gap-3">
+        <section className="min-h-0 border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-xs uppercase text-white/40">
+              Favourite Actors
+            </h3>
+          </div>
 
-        <div className="space-y-2 overflow-y-auto flex-1 min-h-0 pr-1">
-          {actors.length ? (
-            actors.map((actor) => (
-              <div
-                key={actor.id}
-                className="group flex items-center gap-3 w-full hover:bg-zinc-700/60 px-2 py-1 rounded-lg transition"
-              >
-                <button
-                  onClick={(e) => onOpenPath(e, `/person/${actor.id}`)}
-                  onAuxClick={(e) => {
-                    if (e.button === 1) {
-                      e.preventDefault();
-                      onOpenPath(e, `/person/${actor.id}`);
-                    }
-                  }}
-                  className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                >
-                  <img
-                    src={
-                      getActorImageSrc(actor, "w185") ||
-                      "https://placehold.co/120x120/111111/ffffff?text=Actor"
-                    }
-                    alt=""
-                    className="w-10 h-10 rounded-full object-cover bg-white/10"
-                  />
-                  <span className="text-sm text-white/80 truncate">
-                    {actor.name}
-                  </span>
-                </button>
-              </div>
-            ))
+          {actorsLoading ? (
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <ImSpinner2 className="text-white/55 animate-spin" size={18} />
+            </div>
           ) : (
-            <p className="text-xs text-white/40 px-2">
-              No favourite actors yet.
-            </p>
+            <div className="space-y-2 flex-1 min-h-0 pr-1 overflow-y-auto">
+              {actors.length ? (
+                actors.map((actor) => (
+                  <div
+                    key={actor.id}
+                    className="group flex items-center gap-3 w-full hover:bg-zinc-700/60 px-2 py-1 rounded-lg transition"
+                  >
+                    <button
+                      onClick={(e) => onOpenPath(e, `/person/${actor.id}`)}
+                      onAuxClick={(e) => {
+                        if (e.button === 1) {
+                          e.preventDefault();
+                          onOpenPath(e, `/person/${actor.id}`);
+                        }
+                      }}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <img
+                        src={
+                          getActorImageSrc(actor, "w185") ||
+                          "https://placehold.co/120x120/111111/ffffff?text=Actor"
+                        }
+                        alt=""
+                        className="w-10 h-10 rounded-full object-cover bg-white/10"
+                      />
+                      <span className="text-sm text-white/80 truncate">
+                        {actor.name}
+                      </span>
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-white/40 px-2">
+                  No favourite actors yet.
+                </p>
+              )}
+            </div>
           )}
-        </div>
-      </section>
+        </section>
 
-      <section className="h-[295px] max-h-[295px] border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
-        <h3 className="text-xs uppercase text-white/40 mb-3">
-          Favourite Movies
-        </h3>
-        <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
-          {movies.length ? (
-            movies.map((item) => (
-              <button
-                key={`movie-${item.id}`}
-                onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
-                onAuxClick={(e) => {
-                  if (e.button === 1) {
-                    e.preventDefault();
-                    onOpenPath(e, `/movies/${item.id}`);
-                  }
-                }}
-                className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
-              >
-                {item.poster ? (
-                  <img
-                    src={`https://image.tmdb.org/t/p/w92${item.poster}`}
-                    alt=""
-                    className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
-                  />
-                ) : (
-                  <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-white/85 truncate">{item.title}</p>
-                </div>
-              </button>
-            ))
+        <section className="min-h-0 border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
+          <h3 className="text-xs uppercase text-white/40 mb-3">
+            Favourite Movies
+          </h3>
+          {moviesLoading ? (
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <ImSpinner2 className="text-white/55 animate-spin" size={18} />
+            </div>
           ) : (
-            <p className="text-xs text-white/40 px-2">No movies saved yet.</p>
+            <div className="space-y-1 flex-1 min-h-0 pr-1 overflow-y-auto">
+              {movies.length ? (
+                movies.map((item) => (
+                  <button
+                    key={`movie-${item.id}`}
+                    onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
+                    onAuxClick={(e) => {
+                      if (e.button === 1) {
+                        e.preventDefault();
+                        onOpenPath(e, `/movies/${item.id}`);
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
+                  >
+                    {item.poster ? (
+                      <img
+                        src={`https://image.tmdb.org/t/p/w92${item.poster}`}
+                        alt=""
+                        className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
+                      />
+                    ) : (
+                      <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white/85 truncate">
+                        {item.title}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-white/40 px-2">
+                  No movies saved yet.
+                </p>
+              )}
+            </div>
           )}
-        </div>
-      </section>
+        </section>
 
-      <section className="h-[294px] max-h-[294px] border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
-        <h3 className="text-xs uppercase text-white/40 mb-3">
-          Favourite Shows
-        </h3>
-        <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
-          {shows.length ? (
-            shows.map((item) => (
-              <button
-                key={`tv-${item.id}`}
-                onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
-                onAuxClick={(e) => {
-                  if (e.button === 1) {
-                    e.preventDefault();
-                    onOpenPath(e, `/shows/${item.id}`);
-                  }
-                }}
-                className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
-              >
-                {item.poster ? (
-                  <img
-                    src={`https://image.tmdb.org/t/p/w92${item.poster}`}
-                    alt=""
-                    className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
-                  />
-                ) : (
-                  <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-white/85 truncate">{item.title}</p>
-                </div>
-              </button>
-            ))
+        <section className="min-h-0 border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
+          <h3 className="text-xs uppercase text-white/40 mb-3">
+            Favourite Shows
+          </h3>
+          {showsLoading ? (
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <ImSpinner2 className="text-white/55 animate-spin" size={18} />
+            </div>
           ) : (
-            <p className="text-xs text-white/40 px-2">No shows saved yet.</p>
+            <div className="space-y-1 flex-1 min-h-0 pr-1 overflow-y-auto">
+              {shows.length ? (
+                shows.map((item) => (
+                  <button
+                    key={`tv-${item.id}`}
+                    onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
+                    onAuxClick={(e) => {
+                      if (e.button === 1) {
+                        e.preventDefault();
+                        onOpenPath(e, `/shows/${item.id}`);
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
+                  >
+                    {item.poster ? (
+                      <img
+                        src={`https://image.tmdb.org/t/p/w92${item.poster}`}
+                        alt=""
+                        className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
+                      />
+                    ) : (
+                      <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white/85 truncate">
+                        {item.title}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-white/40 px-2">
+                  No shows saved yet.
+                </p>
+              )}
+            </div>
           )}
-        </div>
-      </section>
+        </section>
+      </div>
     </motion.aside>
   );
 };
@@ -490,18 +534,23 @@ const ActorImageSourceModal = ({
   linkValid,
   previewError,
   uploadPreview,
+  uploadFileName,
   saving,
   onLinkChange,
   onUploadPick,
   onPreviewError,
   onClose,
   onSave,
+  onRemove,
 }) => {
-  const previewSrc = mode === "upload" ? uploadPreview : linkValue.trim();
+  const previewSrc =
+    mode === "upload"
+      ? uploadPreview || linkValue.trim()
+      : linkValue.trim() || uploadPreview;
   const canPreview =
     mode === "upload"
-      ? Boolean(uploadPreview)
-      : Boolean(linkValue.trim() && linkValid);
+      ? Boolean(uploadPreview || (linkValue.trim() && linkValid))
+      : Boolean((linkValue.trim() && linkValid) || uploadPreview);
 
   return (
     <AnimatePresence>
@@ -586,6 +635,9 @@ const ActorImageSourceModal = ({
                       className="block w-full text-xs text-white/70 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-white hover:file:bg-zinc-700"
                     />
                     <p className="text-xs text-white/45">
+                      {uploadFileName || "No file selected."}
+                    </p>
+                    <p className="text-xs text-white/45">
                       Pick an image file to apply as the custom actor image.
                     </p>
                   </div>
@@ -622,6 +674,13 @@ const ActorImageSourceModal = ({
               </div>
             </div>
             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end gap-2">
+              <button
+                onClick={onRemove}
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded-md border border-white/20 bg-transparent hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Remove Image
+              </button>
               <button
                 onClick={onClose}
                 disabled={saving}
@@ -690,6 +749,11 @@ const Account = () => {
   const [sortFilter, setSortFilter] = useState("recent");
   const [pageBySection, setPageBySection] = useState({});
   const [loading, setLoading] = useState(true);
+  const [sidePanelReady, setSidePanelReady] = useState({
+    actors: false,
+    movies: false,
+    shows: false,
+  });
   const [confirm, setConfirm] = useState(null);
   const [removeConfirm, setRemoveConfirm] = useState(null);
   const [quickRate, setQuickRate] = useState(null);
@@ -704,6 +768,7 @@ const Account = () => {
   const [actorImageMode, setActorImageMode] = useState("upload");
   const [actorImageLinkValue, setActorImageLinkValue] = useState("");
   const [actorImageUploadPreview, setActorImageUploadPreview] = useState("");
+  const [actorImageUploadFileName, setActorImageUploadFileName] = useState("");
   const [actorImageLinkPreviewError, setActorImageLinkPreviewError] =
     useState(false);
   const [actorHoverValueById, setActorHoverValueById] = useState({});
@@ -793,10 +858,12 @@ const Account = () => {
         setItems([]);
         setActors([]);
         setLoading(false);
+        setSidePanelReady({ actors: true, movies: true, shows: true });
         return;
       }
 
       setLoading(true);
+      setSidePanelReady({ actors: false, movies: false, shows: false });
       const moviesRef = collection(
         db,
         ...profileSavedCollectionPath(
@@ -876,6 +943,7 @@ const Account = () => {
           };
         });
         moviesReady = true;
+        setSidePanelReady((prev) => ({ ...prev, movies: true }));
         sync();
       });
 
@@ -888,6 +956,7 @@ const Account = () => {
           };
         });
         tvReady = true;
+        setSidePanelReady((prev) => ({ ...prev, shows: true }));
         sync();
       });
 
@@ -905,7 +974,11 @@ const Account = () => {
 
       const unsubActors = onSnapshot(
         query(actorsRef, orderBy("updatedAt", "desc")),
-        (snap) => setActors(snap.docs.map((d) => d.data())),
+        (snap) => {
+          setActors(snap.docs.map((d) => d.data()));
+          setSidePanelReady((prev) => ({ ...prev, actors: true }));
+          sync();
+        },
       );
 
       const unsubActorRatings = onSnapshot(actorRatingsRef, (snap) => {
@@ -1085,10 +1158,40 @@ const Account = () => {
   };
 
   const openActorImageModal = (actor) => {
+    const rawImage = String(actor?.image || "").trim();
+    const savedSource = String(actor?.customImage?.source || "").toLowerCase();
+    const isHttpImage = /^https?:\/\/\S+$/i.test(rawImage);
+    const isDataImage = rawImage.startsWith("data:image/");
+
     setActorImageModal({ open: true, actor });
-    setActorImageMode("upload");
-    setActorImageLinkValue("");
-    setActorImageUploadPreview("");
+    if (savedSource === "link" && isHttpImage) {
+      setActorImageMode("link");
+      setActorImageLinkValue(rawImage);
+      setActorImageUploadPreview("");
+      setActorImageUploadFileName("");
+    } else if (savedSource === "upload" && isDataImage) {
+      setActorImageMode("upload");
+      setActorImageLinkValue("");
+      setActorImageUploadPreview(rawImage);
+      setActorImageUploadFileName(
+        String(actor?.customImage?.fileName || "Saved uploaded image"),
+      );
+    } else if (isDataImage) {
+      setActorImageMode("upload");
+      setActorImageLinkValue("");
+      setActorImageUploadPreview(rawImage);
+      setActorImageUploadFileName("Saved uploaded image");
+    } else if (isHttpImage) {
+      setActorImageMode("link");
+      setActorImageLinkValue(rawImage);
+      setActorImageUploadPreview("");
+      setActorImageUploadFileName("");
+    } else {
+      setActorImageMode("upload");
+      setActorImageLinkValue("");
+      setActorImageUploadPreview("");
+      setActorImageUploadFileName("");
+    }
     setActorImageLinkPreviewError(false);
   };
 
@@ -1216,6 +1319,16 @@ const Account = () => {
     setSavingActorImageId(Number(actor.id));
     try {
       const cleanedImage = String(nextImage).trim();
+      const customSource = cleanedImage.startsWith("data:image/")
+        ? "upload"
+        : "link";
+      const customImage = {
+        source: customSource,
+        fileName:
+          customSource === "upload"
+            ? actorImageUploadFileName || "Uploaded image"
+            : null,
+      };
       const isFavouriteActor = actors.some(
         (a) => String(a.id) === String(actor.id),
       );
@@ -1234,7 +1347,7 @@ const Account = () => {
             id: Number(actor.id),
             name: actor.name || "",
             image: cleanedImage,
-            customImage: deleteField(),
+            customImage,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -1242,7 +1355,7 @@ const Account = () => {
         setActors((prev) =>
           prev.map((a) =>
             String(a.id) === String(actor.id)
-              ? { ...a, image: cleanedImage }
+              ? { ...a, image: cleanedImage, customImage }
               : a,
           ),
         );
@@ -1262,6 +1375,7 @@ const Account = () => {
             id: Number(actor.id),
             title: actor.name || "",
             image: cleanedImage,
+            customImage,
           },
           { merge: true },
         );
@@ -1272,6 +1386,7 @@ const Account = () => {
             id: Number(actor.id),
             title: actor.name || prev[String(actor.id)]?.title || "",
             image: cleanedImage,
+            customImage,
           },
         }));
       }
@@ -1299,6 +1414,7 @@ const Account = () => {
     setActorImageMode("upload");
     setActorImageLinkValue("");
     setActorImageUploadPreview("");
+    setActorImageUploadFileName("");
     setActorImageLinkPreviewError(false);
   };
 
@@ -1312,8 +1428,10 @@ const Account = () => {
       setToast("Please pick an image file");
       setTimeout(() => setToast(null), 2500);
       setActorImageUploadPreview("");
+      setActorImageUploadFileName("");
       return;
     }
+    setActorImageUploadFileName(String(file.name || "Selected image"));
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : "";
@@ -1324,6 +1442,7 @@ const Account = () => {
       setToast("Failed to read image");
       setTimeout(() => setToast(null), 2500);
       setActorImageUploadPreview("");
+      setActorImageUploadFileName("");
     };
     reader.readAsDataURL(file);
   };
@@ -1339,6 +1458,93 @@ const Account = () => {
     const saved = await saveActorImage(actor, source);
     if (saved) {
       closeActorImageModal();
+    }
+  };
+
+  const removeActorImageFromModal = async () => {
+    const actor = actorImageModal.actor;
+    const currentUser = auth.currentUser;
+    if (!actor || !currentUser?.email) return;
+
+    const actorId = Number(actor.id);
+    if (!Number.isFinite(actorId) || actorId <= 0) return;
+
+    setSavingActorImageId(actorId);
+    try {
+      const isFavouriteActor = actors.some(
+        (a) => String(a.id) === String(actorId),
+      );
+
+      if (isFavouriteActor) {
+        const actorRef = doc(
+          db,
+          ...profileLikedActorItemPath(
+            currentUser.email,
+            activeProfileId,
+            actorId,
+          ),
+        );
+        await setDoc(
+          actorRef,
+          {
+            id: actorId,
+            image: null,
+            customImage: deleteField(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        setActors((prev) =>
+          prev.map((a) =>
+            String(a.id) === String(actorId)
+              ? { ...a, image: null, customImage: undefined }
+              : a,
+          ),
+        );
+      } else {
+        const ratingRef = doc(
+          db,
+          ...profileRatingItemPath(
+            currentUser.email,
+            activeProfileId,
+            "actors",
+            actorId,
+          ),
+        );
+        await setDoc(
+          ratingRef,
+          {
+            id: actorId,
+            image: null,
+            customImage: deleteField(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        setActorRatingsById((prev) => ({
+          ...prev,
+          [String(actorId)]: {
+            ...(prev[String(actorId)] || {}),
+            id: actorId,
+            image: null,
+            customImage: undefined,
+          },
+        }));
+      }
+
+      setActorImageLinkValue("");
+      setActorImageUploadPreview("");
+      setActorImageUploadFileName("");
+      setActorImageLinkPreviewError(false);
+
+      setToast(`Removed custom image for "${actor.name}"`);
+      setTimeout(() => setToast(null), 2500);
+      closeActorImageModal();
+    } catch {
+      setToast("Failed to remove actor image");
+      setTimeout(() => setToast(null), 2500);
+    } finally {
+      setSavingActorImageId(null);
     }
   };
 
@@ -1969,19 +2175,19 @@ const Account = () => {
                       ratingButtonLabel
                     ) : (
                       <span className="inline-flex items-center gap-0.5 align-middle">
-                        {Array.from({ length: ratingButtonLabel?.full || 0 }).map(
-                          (_, idx) => (
-                            <FaStar key={`full-${idx}`} size={12} />
-                          ),
-                        )}
+                        {Array.from({
+                          length: ratingButtonLabel?.full || 0,
+                        }).map((_, idx) => (
+                          <FaStar key={`full-${idx}`} size={12} />
+                        ))}
                         {ratingButtonLabel?.half ? (
                           <FaStarHalfAlt key="half" size={12} />
                         ) : null}
-                        {Array.from({ length: ratingButtonLabel?.empty || 0 }).map(
-                          (_, idx) => (
-                            <FaRegStar key={`empty-${idx}`} size={12} />
-                          ),
-                        )}
+                        {Array.from({
+                          length: ratingButtonLabel?.empty || 0,
+                        }).map((_, idx) => (
+                          <FaRegStar key={`empty-${idx}`} size={12} />
+                        ))}
                       </span>
                     )}
                   </button>
@@ -2242,7 +2448,7 @@ const Account = () => {
                   alt=""
                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"
                 />
-                <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/95 via-black/20 to-transparent pointer-events-none" />
                 <button
                   onClick={(e) => openPath(e, `/person/${actor.id}`)}
                   onAuxClick={(e) => {
@@ -2738,6 +2944,9 @@ const Account = () => {
         actorRatingsById={actorRatingsById}
         movies={sideMovies}
         shows={sideShows}
+        actorsLoading={!sidePanelReady.actors}
+        moviesLoading={!sidePanelReady.movies}
+        showsLoading={!sidePanelReady.shows}
         onOpenPath={openPath}
         onRemoveActor={removeActor}
         getActorImageSrc={getActorImageSrc}
@@ -2790,14 +2999,13 @@ const Account = () => {
         mode={actorImageMode}
         onModeChange={(nextMode) => {
           setActorImageMode(nextMode);
-          setActorImageLinkValue("");
-          setActorImageUploadPreview("");
           setActorImageLinkPreviewError(false);
         }}
         linkValue={actorImageLinkValue}
         linkValid={actorImageLinkValid}
         previewError={actorImageLinkPreviewError}
         uploadPreview={actorImageUploadPreview}
+        uploadFileName={actorImageUploadFileName}
         saving={savingActorImageId === Number(actorImageModal.actor?.id)}
         onLinkChange={(nextValue) => {
           setActorImageLinkValue(nextValue);
@@ -2807,6 +3015,7 @@ const Account = () => {
         onPreviewError={() => setActorImageLinkPreviewError(true)}
         onClose={closeActorImageModal}
         onSave={saveActorImageFromModal}
+        onRemove={removeActorImageFromModal}
       />
 
       <AnimatePresence>
@@ -2817,4 +3026,3 @@ const Account = () => {
 };
 
 export default Account;
-

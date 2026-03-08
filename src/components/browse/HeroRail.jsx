@@ -234,7 +234,7 @@ const HeroRail = ({ poolEndpoint }) => {
 
         <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/60" />
 
-        <div className="absolute left-4 sm:left-6 md:left-8 lg:left-12 bottom-4 md:bottom-6 z-20">
+        <div className="absolute left-4 sm:left-auto sm:right-4 md:left-auto md:right-6 lg:left-12 lg:right-auto bottom-4 md:bottom-6 z-20">
           <div className="flex items-center gap-1.5 rounded-full border border-white/35 bg-black/65 backdrop-blur-md px-2 py-1 shadow-[0_6px_22px_rgba(0,0,0,0.55)]">
             <button
               onClick={togglePlay}
@@ -273,7 +273,9 @@ const HeroRail = ({ poolEndpoint }) => {
             onClick={(e) => {
               const isTV =
                 current.media_type === "tv" || Boolean(current.first_air_date);
-              const path = isTV ? `/shows/${current.id}` : `/movies/${current.id}`;
+              const path = isTV
+                ? `/shows/${current.id}`
+                : `/movies/${current.id}`;
               if (e?.metaKey || e?.ctrlKey || e?.button === 1) {
                 window.open(path, "_blank", "noopener,noreferrer");
                 return;
@@ -286,7 +288,9 @@ const HeroRail = ({ poolEndpoint }) => {
                 const isTV =
                   current.media_type === "tv" ||
                   Boolean(current.first_air_date);
-                const path = isTV ? `/shows/${current.id}` : `/movies/${current.id}`;
+                const path = isTV
+                  ? `/shows/${current.id}`
+                  : `/movies/${current.id}`;
                 window.open(path, "_blank", "noopener,noreferrer");
               }
             }}
