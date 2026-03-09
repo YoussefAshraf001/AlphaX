@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { auth, db } from "../firebase";
 import {
@@ -41,6 +42,10 @@ import {
   profileSavedItemPath,
   resolveProfileId,
 } from "../utils/profileFirestorePaths";
+import {
+  isCloudinaryUrl,
+  uploadImageToCloudinary,
+} from "../utils/cloudinaryUpload";
 
 /* =========================
    STATUS CONFIG
@@ -98,6 +103,156 @@ const isUnknownReleaseDateValue = (value) => {
 const getYearFromReleaseValue = (value) => {
   const match = String(value || "").match(/\b(19|20)\d{2}\b/);
   return match ? Number(match[0]) : null;
+};
+
+const sanitizeCloudinarySegment = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+const buildActorPublicId = (email, profileId, actorId) => {
+  const safeEmail = sanitizeCloudinarySegment(email || "user");
+  const safeProfile = sanitizeCloudinarySegment(profileId || "main");
+  const safeActor = sanitizeCloudinarySegment(actorId || "actor");
+  return `${safeEmail}_${safeProfile}_${safeActor}`;
+};
+
+const buildActorUploadName = (name, actorId) => {
+  const safeName = sanitizeCloudinarySegment(name || "actor");
+  const safeActor = sanitizeCloudinarySegment(actorId || "actor");
+  return safeName ? `${safeName}_${safeActor}` : `actor_${safeActor}`;
+};
+
+const buildActorFolder = (name) => {
+  const safeName = sanitizeCloudinarySegment(name || "actor");
+  return `alphax/actors/${safeName || "actor"}`;
+};
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
+
+const loadImageFromObjectUrl = (url) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = url;
+  });
+
+const compressImageFileToDataUrl = async (
+  file,
+  { maxDimension = 960, quality = 0.8 } = {},
+) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (!type.startsWith("image/")) {
+    throw new Error("Please pick an image file");
+  }
+  if (type === "image/gif") {
+    // Keep GIFs unchanged so animation is preserved.
+    return readFileAsDataUrl(file);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageFromObjectUrl(objectUrl);
+    const srcWidth = Number(image.naturalWidth || image.width || 0);
+    const srcHeight = Number(image.naturalHeight || image.height || 0);
+    if (srcWidth <= 0 || srcHeight <= 0) {
+      throw new Error("Invalid image");
+    }
+
+    const scale = Math.min(1, maxDimension / Math.max(srcWidth, srcHeight));
+    const targetWidth = Math.max(1, Math.round(srcWidth * scale));
+    const targetHeight = Math.max(1, Math.round(srcHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Failed to process image");
+
+    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+    return canvas.toDataURL("image/webp", quality);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+const getReleasedEpisodeTotalFromShow = (show) => {
+  if (!show) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const seasonEpisodeCountsBase = Array.isArray(show.seasons)
+    ? show.seasons
+        .filter(
+          (season) =>
+            Number(season?.season_number) > 0 &&
+            Number(season?.episode_count) > 0,
+        )
+        .map((season) => ({
+          seasonNumber: Number(season.season_number),
+          episodeCount: Number(season.episode_count),
+          airDate: season.air_date || null,
+        }))
+    : [];
+
+  const lastAiredSeasonNumber = Number(show.last_episode_to_air?.season_number);
+  const lastAiredEpisodeNumber = Number(
+    show.last_episode_to_air?.episode_number,
+  );
+  const hasLastAiredEpisode =
+    lastAiredSeasonNumber > 0 && lastAiredEpisodeNumber > 0;
+
+  const releasedSeasonEpisodeCounts = hasLastAiredEpisode
+    ? seasonEpisodeCountsBase
+        .filter((season) => season.seasonNumber <= lastAiredSeasonNumber)
+        .map((season) => ({
+          episodeCount:
+            season.seasonNumber === lastAiredSeasonNumber
+              ? Math.min(season.episodeCount, lastAiredEpisodeNumber)
+              : season.episodeCount,
+        }))
+        .filter((season) => season.episodeCount > 0)
+    : seasonEpisodeCountsBase
+        .filter((season) => {
+          if (!season.airDate) return false;
+          const dt = new Date(`${season.airDate}T00:00:00`);
+          return !Number.isNaN(dt.getTime()) && dt.getTime() <= today.getTime();
+        })
+        .map((season) => ({
+          episodeCount: season.episodeCount,
+        }));
+
+  const hasSeasonAirDateInfo = seasonEpisodeCountsBase.some((season) =>
+    Boolean(season.airDate),
+  );
+
+  if (releasedSeasonEpisodeCounts.length) {
+    return releasedSeasonEpisodeCounts.reduce(
+      (sum, season) => sum + season.episodeCount,
+      0,
+    );
+  }
+
+  if (
+    !hasSeasonAirDateInfo &&
+    Number.isFinite(Number(show.number_of_episodes)) &&
+    Number(show.number_of_episodes) > 0
+  ) {
+    return Number(show.number_of_episodes);
+  }
+
+  return 0;
 };
 
 const EMOJI_SCALE = [
@@ -204,145 +359,193 @@ const SidePanel = ({
             </h3>
           </div>
 
-          {actorsLoading ? (
-            <div className="flex-1 min-h-0 flex items-center justify-center">
-              <ImSpinner2 className="text-white/55 animate-spin" size={18} />
-            </div>
-          ) : (
-            <div className="space-y-2 flex-1 min-h-0 pr-1 overflow-y-auto">
-              {actors.length ? (
-                actors.map((actor) => (
-                  <div
-                    key={actor.id}
-                    className="group flex items-center gap-3 w-full hover:bg-zinc-700/60 px-2 py-1 rounded-lg transition"
-                  >
-                    <button
-                      onClick={(e) => onOpenPath(e, `/person/${actor.id}`)}
-                      onAuxClick={(e) => {
-                        if (e.button === 1) {
-                          e.preventDefault();
-                          onOpenPath(e, `/person/${actor.id}`);
-                        }
-                      }}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+          <AnimatePresence mode="wait" initial={false}>
+            {actorsLoading ? (
+              <motion.div
+                key="actors-loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1 min-h-0 flex items-center justify-center"
+              >
+                <ImSpinner2 className="text-white/55 animate-spin" size={18} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="actors-content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-2 flex-1 min-h-0 pr-1 overflow-y-auto"
+              >
+                {actors.length ? (
+                  actors.map((actor) => (
+                    <div
+                      key={actor.id}
+                      className="group flex items-center gap-3 w-full hover:bg-zinc-700/60 px-2 py-1 rounded-lg transition"
                     >
-                      <img
-                        src={
-                          getActorImageSrc(actor, "w185") ||
-                          "https://placehold.co/120x120/111111/ffffff?text=Actor"
-                        }
-                        alt=""
-                        className="w-10 h-10 rounded-full object-cover bg-white/10"
-                      />
-                      <span className="text-sm text-white/80 truncate">
-                        {actor.name}
-                      </span>
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-white/40 px-2">
-                  No favourite actors yet.
-                </p>
-              )}
-            </div>
-          )}
+                      <button
+                        onClick={(e) => onOpenPath(e, `/person/${actor.id}`)}
+                        onAuxClick={(e) => {
+                          if (e.button === 1) {
+                            e.preventDefault();
+                            onOpenPath(e, `/person/${actor.id}`);
+                          }
+                        }}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <img
+                          src={
+                            getActorImageSrc(actor, "w185") ||
+                            "https://placehold.co/120x120/111111/ffffff?text=Actor"
+                          }
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover bg-white/10"
+                        />
+                        <span className="text-sm text-white/80 truncate">
+                          {actor.name}
+                        </span>
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-white/40 px-2">
+                    No favourite actors yet.
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
         <section className="min-h-0 border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
           <h3 className="text-xs uppercase text-white/40 mb-3">
             Favourite Movies
           </h3>
-          {moviesLoading ? (
-            <div className="flex-1 min-h-0 flex items-center justify-center">
-              <ImSpinner2 className="text-white/55 animate-spin" size={18} />
-            </div>
-          ) : (
-            <div className="space-y-1 flex-1 min-h-0 pr-1 overflow-y-auto">
-              {movies.length ? (
-                movies.map((item) => (
-                  <button
-                    key={`movie-${item.id}`}
-                    onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
-                    onAuxClick={(e) => {
-                      if (e.button === 1) {
-                        e.preventDefault();
-                        onOpenPath(e, `/movies/${item.id}`);
-                      }
-                    }}
-                    className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
-                  >
-                    {item.poster ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w92${item.poster}`}
-                        alt=""
-                        className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
-                      />
-                    ) : (
-                      <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white/85 truncate">
-                        {item.title}
-                      </p>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-white/40 px-2">
-                  No movies saved yet.
-                </p>
-              )}
-            </div>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {moviesLoading ? (
+              <motion.div
+                key="movies-loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1 min-h-0 flex items-center justify-center"
+              >
+                <ImSpinner2 className="text-white/55 animate-spin" size={18} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="movies-content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-1 flex-1 min-h-0 pr-1 overflow-y-auto"
+              >
+                {movies.length ? (
+                  movies.map((item) => (
+                    <button
+                      key={`movie-${item.id}`}
+                      onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
+                      onAuxClick={(e) => {
+                        if (e.button === 1) {
+                          e.preventDefault();
+                          onOpenPath(e, `/movies/${item.id}`);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
+                    >
+                      {item.poster ? (
+                        <img
+                          src={`https://image.tmdb.org/t/p/w92${item.poster}`}
+                          alt=""
+                          className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
+                        />
+                      ) : (
+                        <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white/85 truncate">
+                          {item.title}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-white/40 px-2">
+                    No movies saved yet.
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
         <section className="min-h-0 border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
           <h3 className="text-xs uppercase text-white/40 mb-3">
             Favourite Shows
           </h3>
-          {showsLoading ? (
-            <div className="flex-1 min-h-0 flex items-center justify-center">
-              <ImSpinner2 className="text-white/55 animate-spin" size={18} />
-            </div>
-          ) : (
-            <div className="space-y-1 flex-1 min-h-0 pr-1 overflow-y-auto">
-              {shows.length ? (
-                shows.map((item) => (
-                  <button
-                    key={`tv-${item.id}`}
-                    onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
-                    onAuxClick={(e) => {
-                      if (e.button === 1) {
-                        e.preventDefault();
-                        onOpenPath(e, `/shows/${item.id}`);
-                      }
-                    }}
-                    className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
-                  >
-                    {item.poster ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w92${item.poster}`}
-                        alt=""
-                        className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
-                      />
-                    ) : (
-                      <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white/85 truncate">
-                        {item.title}
-                      </p>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-white/40 px-2">
-                  No shows saved yet.
-                </p>
-              )}
-            </div>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {showsLoading ? (
+              <motion.div
+                key="shows-loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1 min-h-0 flex items-center justify-center"
+              >
+                <ImSpinner2 className="text-white/55 animate-spin" size={18} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="shows-content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-1 flex-1 min-h-0 pr-1 overflow-y-auto"
+              >
+                {shows.length ? (
+                  shows.map((item) => (
+                    <button
+                      key={`tv-${item.id}`}
+                      onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
+                      onAuxClick={(e) => {
+                        if (e.button === 1) {
+                          e.preventDefault();
+                          onOpenPath(e, `/shows/${item.id}`);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2 text-left hover:bg-zinc-700/60 px-2 py-1.5 rounded-md transition"
+                    >
+                      {item.poster ? (
+                        <img
+                          src={`https://image.tmdb.org/t/p/w92${item.poster}`}
+                          alt=""
+                          className="w-8 h-12 rounded object-cover shrink-0 bg-white/10"
+                        />
+                      ) : (
+                        <div className="w-8 h-12 rounded bg-white/10 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white/85 truncate">
+                          {item.title}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-white/40 px-2">
+                    No shows saved yet.
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
       </div>
     </motion.aside>
@@ -528,6 +731,8 @@ const QuickRateModal = ({
 const ActorImageSourceModal = ({
   open,
   actor,
+  canRemove,
+  pendingRemove,
   mode,
   onModeChange,
   linkValue,
@@ -543,12 +748,14 @@ const ActorImageSourceModal = ({
   onSave,
   onRemove,
 }) => {
-  const previewSrc =
-    mode === "upload"
+  const previewSrc = pendingRemove
+    ? ""
+    : mode === "upload"
       ? uploadPreview || linkValue.trim()
       : linkValue.trim() || uploadPreview;
-  const canPreview =
-    mode === "upload"
+  const canPreview = pendingRemove
+    ? false
+    : mode === "upload"
       ? Boolean(uploadPreview || (linkValue.trim() && linkValid))
       : Boolean((linkValue.trim() && linkValid) || uploadPreview);
 
@@ -598,48 +805,77 @@ const ActorImageSourceModal = ({
               </div>
 
               <div className="min-w-0 flex flex-col rounded-xl border border-white/10 bg-black/25 p-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <button
-                    onClick={() => onModeChange("upload")}
-                    disabled={saving}
-                    className={`px-3.5 py-2 rounded-md text-xs border transition ${
-                      mode === "upload"
-                        ? "bg-red-500/20 border-red-400/50 text-white"
-                        : "bg-white/5 border-white/10 text-white/45"
-                    }`}
-                  >
-                    Upload
-                  </button>
-                  <button
-                    onClick={() => onModeChange("link")}
-                    disabled={saving}
-                    className={`px-3.5 py-2 rounded-md text-xs border transition ${
-                      mode === "link"
-                        ? "bg-red-500/20 border-red-400/50 text-white"
-                        : "bg-white/5 border-white/10 text-white/45"
-                    }`}
-                  >
-                    Image URL
-                  </button>
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onModeChange("upload")}
+                      disabled={saving}
+                      className={`px-3.5 py-2 rounded-md text-xs border transition ${
+                        mode === "upload"
+                          ? "bg-red-500/20 border-red-400/50 text-white"
+                          : "bg-white/5 border-white/10 text-white/45"
+                      }`}
+                    >
+                      Upload
+                    </button>
+                    <button
+                      onClick={() => onModeChange("link")}
+                      disabled={saving}
+                      className={`px-3.5 py-2 rounded-md text-xs border transition ${
+                        mode === "link"
+                          ? "bg-red-500/20 border-red-400/50 text-white"
+                          : "bg-white/5 border-white/10 text-white/45"
+                      }`}
+                    >
+                      Image URL
+                    </button>
+                  </div>
+                  {canRemove && (
+                    <button
+                      onClick={onRemove}
+                      disabled={saving}
+                      className="px-3 py-1.5 text-xs rounded-md border border-red-300/40 text-red-200 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {pendingRemove ? "Undo Remove" : "Remove"}
+                    </button>
+                  )}
                 </div>
                 {mode === "upload" ? (
                   <div className="space-y-3">
                     <label className="block text-xs text-white/60">
                       Upload Image
                     </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={saving}
-                      onChange={onUploadPick}
-                      className="block w-full text-xs text-white/70 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-white hover:file:bg-zinc-700"
-                    />
-                    <p className="text-xs text-white/45">
-                      {uploadFileName || "No file selected."}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="actor-image-upload-input"
+                        type="file"
+                        accept="image/*"
+                        disabled={saving}
+                        onChange={onUploadPick}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="actor-image-upload-input"
+                        className={`inline-flex items-center px-3 py-2 rounded-md text-xs transition ${
+                          saving
+                            ? "bg-zinc-800 text-white/40 cursor-not-allowed"
+                            : "bg-zinc-800 text-white hover:bg-zinc-700 cursor-pointer"
+                        }`}
+                      >
+                        Browse...
+                      </label>
+                      <p className="text-xs text-white/60 min-w-0 truncate">
+                        {uploadFileName || "No file selected."}
+                      </p>
+                    </div>
                     <p className="text-xs text-white/45">
                       Pick an image file to apply as the custom actor image.
                     </p>
+                    {pendingRemove && (
+                      <p className="text-xs text-red-300">
+                        Image removal is queued. Click Save Image to confirm.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -669,18 +905,16 @@ const ActorImageSourceModal = ({
                       Tip: use direct image links (`.jpg`, `.png`, `.webp`) for
                       reliable previews.
                     </p>
+                    {pendingRemove && (
+                      <p className="text-xs text-red-300">
+                        Image removal is queued. Click Save Image to confirm.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
             </div>
             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end gap-2">
-              <button
-                onClick={onRemove}
-                disabled={saving}
-                className="px-4 py-2 text-sm rounded-md border border-white/20 bg-transparent hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                Remove Image
-              </button>
               <button
                 onClick={onClose}
                 disabled={saving}
@@ -691,10 +925,15 @@ const ActorImageSourceModal = ({
               <button
                 onClick={onSave}
                 disabled={
-                  saving || (mode === "link" ? !linkValid : !uploadPreview)
+                  saving ||
+                  (!pendingRemove &&
+                    (mode === "link" ? !linkValid : !uploadPreview))
                 }
-                className="px-4 py-2 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-4 py-2 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition inline-flex items-center gap-2"
               >
+                {saving && (
+                  <span className="loading loading-spinner loading-xs text-white" />
+                )}
                 {saving ? "Saving..." : "Save Image"}
               </button>
             </div>
@@ -708,22 +947,28 @@ const ActorImageSourceModal = ({
 /* =========================
    TOAST
 ========================= */
-const Toast = ({ message, onClose }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: 20 }}
-    className="fixed top-20 left-1/2 -translate-x-1/2 z-[1200] bg-[#0d0d0d]/95 border border-red-600/80 text-white shadow-[0_10px_32px_rgba(0,0,0,0.65)] px-5 py-3 rounded-lg text-sm backdrop-blur-md"
-  >
-    {message}
-    <button
-      onClick={onClose}
-      className="ml-4 text-red-300/70 hover:text-red-200"
-    >
-      x
-    </button>
-  </motion.div>
-);
+const Toast = ({ message, onClose }) =>
+  createPortal(
+    <div className="fixed inset-x-0 top-20 z-[1200] flex justify-center px-4 pointer-events-none">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="pointer-events-auto w-[min(92vw,680px)] bg-[#0d0d0d]/95 border border-red-600/80 text-white shadow-[0_10px_32px_rgba(0,0,0,0.65)] px-4 py-3 rounded-lg text-sm backdrop-blur-md"
+      >
+        <div className="flex items-start gap-3">
+          <p className="min-w-0 flex-1 break-words leading-6">{message}</p>
+          <button
+            onClick={onClose}
+            className="shrink-0 text-red-300/70 hover:text-red-200"
+          >
+            x
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body,
+  );
 
 const Account = () => {
   const navigate = useNavigate();
@@ -770,6 +1015,8 @@ const Account = () => {
   const [actorImageUploadPreview, setActorImageUploadPreview] = useState("");
   const [actorImageUploadFileName, setActorImageUploadFileName] = useState("");
   const [actorImageLinkPreviewError, setActorImageLinkPreviewError] =
+    useState(false);
+  const [pendingActorImageRemoval, setPendingActorImageRemoval] =
     useState(false);
   const [actorHoverValueById, setActorHoverValueById] = useState({});
   const [loadedPosterKeys, setLoadedPosterKeys] = useState({});
@@ -821,7 +1068,15 @@ const Account = () => {
     if (!actor) return null;
     const raw = String(actor.image || "").trim();
     if (!raw) return null;
-    if (/^https?:\/\//i.test(raw) || raw.startsWith("data:image/")) return raw;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith("data:image/")) {
+      const isCloudinary = /^https?:\/\/res\.cloudinary\.com\/.+/i.test(raw);
+      const version = Number(actor?.customImage?.version || 0);
+      if (isCloudinary && version > 0) {
+        const hasQuery = raw.includes("?");
+        return `${raw}${hasQuery ? "&" : "?"}v=${version}`;
+      }
+      return raw;
+    }
     if (raw.startsWith("/")) return `https://image.tmdb.org/t/p/${size}${raw}`;
     return `https://image.tmdb.org/t/p/${size}/${raw}`;
   };
@@ -1157,35 +1412,23 @@ const Account = () => {
     }
   };
 
-  const openActorImageModal = (actor) => {
+  const hydrateActorImageDraftFromActor = (actor) => {
     const rawImage = String(actor?.image || "").trim();
     const savedSource = String(actor?.customImage?.source || "").toLowerCase();
-    const isHttpImage = /^https?:\/\/\S+$/i.test(rawImage);
-    const isDataImage = rawImage.startsWith("data:image/");
+    const isCloudImage = isCloudinaryUrl(rawImage);
 
-    setActorImageModal({ open: true, actor });
-    if (savedSource === "link" && isHttpImage) {
+    if (savedSource === "link" && isCloudImage) {
       setActorImageMode("link");
       setActorImageLinkValue(rawImage);
       setActorImageUploadPreview("");
       setActorImageUploadFileName("");
-    } else if (savedSource === "upload" && isDataImage) {
+    } else if (savedSource === "upload" && isCloudImage) {
       setActorImageMode("upload");
       setActorImageLinkValue("");
       setActorImageUploadPreview(rawImage);
       setActorImageUploadFileName(
         String(actor?.customImage?.fileName || "Saved uploaded image"),
       );
-    } else if (isDataImage) {
-      setActorImageMode("upload");
-      setActorImageLinkValue("");
-      setActorImageUploadPreview(rawImage);
-      setActorImageUploadFileName("Saved uploaded image");
-    } else if (isHttpImage) {
-      setActorImageMode("link");
-      setActorImageLinkValue(rawImage);
-      setActorImageUploadPreview("");
-      setActorImageUploadFileName("");
     } else {
       setActorImageMode("upload");
       setActorImageLinkValue("");
@@ -1193,6 +1436,12 @@ const Account = () => {
       setActorImageUploadFileName("");
     }
     setActorImageLinkPreviewError(false);
+  };
+
+  const openActorImageModal = (actor) => {
+    setActorImageModal({ open: true, actor });
+    setPendingActorImageRemoval(false);
+    hydrateActorImageDraftFromActor(actor);
   };
 
   const refreshActorImageFromSource = async (actor) => {
@@ -1321,9 +1570,32 @@ const Account = () => {
       const cleanedImage = String(nextImage).trim();
       const customSource = cleanedImage.startsWith("data:image/")
         ? "upload"
-        : "link";
+        : actorImageMode === "link"
+          ? "link"
+          : "upload";
+      const actorPublicId = buildActorPublicId(
+        currentUser.email,
+        activeProfileId,
+        actor.id,
+      );
+      const uploaded = await uploadImageToCloudinary(cleanedImage, {
+        folder: buildActorFolder(actor?.name),
+        tags: ["alphax", "actor", customSource],
+        publicId: `${actorPublicId}_${Date.now()}`,
+        filenameOverride: buildActorUploadName(actor?.name, actor?.id),
+      });
+      if (!uploaded?.url) {
+        throw new Error("Image upload failed");
+      }
+
       const customImage = {
         source: customSource,
+        storage: "cloudinary",
+        publicId: uploaded.publicId || null,
+        version: uploaded.version || null,
+        width: uploaded.width || null,
+        height: uploaded.height || null,
+        format: uploaded.format || null,
         fileName:
           customSource === "upload"
             ? actorImageUploadFileName || "Uploaded image"
@@ -1346,7 +1618,28 @@ const Account = () => {
           {
             id: Number(actor.id),
             name: actor.name || "",
-            image: cleanedImage,
+            image: uploaded.url,
+            customImage,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        const ratingRef = doc(
+          db,
+          ...profileRatingItemPath(
+            currentUser.email,
+            activeProfileId,
+            "actors",
+            actor.id,
+          ),
+        );
+        await setDoc(
+          ratingRef,
+          {
+            id: Number(actor.id),
+            title: actor.name || "",
+            image: uploaded.url,
+            mediaType: "person",
             customImage,
             updatedAt: serverTimestamp(),
           },
@@ -1355,10 +1648,21 @@ const Account = () => {
         setActors((prev) =>
           prev.map((a) =>
             String(a.id) === String(actor.id)
-              ? { ...a, image: cleanedImage, customImage }
+              ? { ...a, image: uploaded.url, customImage }
               : a,
           ),
         );
+        setActorRatingsById((prev) => ({
+          ...prev,
+          [String(actor.id)]: {
+            ...(prev[String(actor.id)] || {}),
+            id: Number(actor.id),
+            title: actor.name || prev[String(actor.id)]?.title || "",
+            image: uploaded.url,
+            mediaType: "person",
+            customImage,
+          },
+        }));
       } else {
         const ratingRef = doc(
           db,
@@ -1374,7 +1678,7 @@ const Account = () => {
           {
             id: Number(actor.id),
             title: actor.name || "",
-            image: cleanedImage,
+            image: uploaded.url,
             customImage,
           },
           { merge: true },
@@ -1385,7 +1689,7 @@ const Account = () => {
             ...(prev[String(actor.id)] || {}),
             id: Number(actor.id),
             title: actor.name || prev[String(actor.id)]?.title || "",
-            image: cleanedImage,
+            image: uploaded.url,
             customImage,
           },
         }));
@@ -1393,8 +1697,13 @@ const Account = () => {
       setToast(`Updated image for "${actor.name}"`);
       setTimeout(() => setToast(null), 2500);
       return true;
-    } catch {
-      setToast("Failed to update actor image");
+    } catch (err) {
+      const reason = String(err?.message || "").trim();
+      setToast(
+        reason
+          ? `Failed to update actor image: ${reason}`
+          : "Failed to update actor image",
+      );
       setTimeout(() => setToast(null), 2500);
       return false;
     } finally {
@@ -1416,12 +1725,26 @@ const Account = () => {
     setActorImageUploadPreview("");
     setActorImageUploadFileName("");
     setActorImageLinkPreviewError(false);
+    setPendingActorImageRemoval(false);
   };
 
   const actorImageLinkCleaned = actorImageLinkValue.trim();
   const actorImageLinkValid = /^https?:\/\/\S+$/i.test(actorImageLinkCleaned);
+  const actorHasCustomImage = (() => {
+    const actor = actorImageModal.actor;
+    if (!actor) return false;
 
-  const onActorImageUploadPicked = (event) => {
+    const source = String(actor?.customImage?.source || "").toLowerCase();
+    const storage = String(actor?.customImage?.storage || "").toLowerCase();
+    const rawImage = String(actor?.image || "").trim();
+    return (
+      (source === "upload" || source === "link") &&
+      storage === "cloudinary" &&
+      isCloudinaryUrl(rawImage)
+    );
+  })();
+
+  const onActorImageUploadPicked = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!String(file.type || "").startsWith("image/")) {
@@ -1432,24 +1755,29 @@ const Account = () => {
       return;
     }
     setActorImageUploadFileName(String(file.name || "Selected image"));
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
+    setPendingActorImageRemoval(false);
+    try {
+      const result = await compressImageFileToDataUrl(file, {
+        maxDimension: 960,
+        quality: 0.8,
+      });
       setActorImageUploadPreview(result);
       setActorImageLinkPreviewError(false);
-    };
-    reader.onerror = () => {
+    } catch {
       setToast("Failed to read image");
       setTimeout(() => setToast(null), 2500);
       setActorImageUploadPreview("");
       setActorImageUploadFileName("");
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const saveActorImageFromModal = async () => {
     const actor = actorImageModal.actor;
     if (!actor) return;
+    if (pendingActorImageRemoval) {
+      await removeActorImageFromModal();
+      return;
+    }
     const source =
       actorImageMode === "link"
         ? actorImageLinkCleaned
@@ -1486,6 +1814,25 @@ const Account = () => {
         );
         await setDoc(
           actorRef,
+          {
+            id: actorId,
+            image: null,
+            customImage: deleteField(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        const ratingRef = doc(
+          db,
+          ...profileRatingItemPath(
+            currentUser.email,
+            activeProfileId,
+            "actors",
+            actorId,
+          ),
+        );
+        await setDoc(
+          ratingRef,
           {
             id: actorId,
             image: null,
@@ -1546,6 +1893,23 @@ const Account = () => {
     } finally {
       setSavingActorImageId(null);
     }
+  };
+
+  const queueActorImageRemovalFromModal = () => {
+    const actor = actorImageModal.actor;
+    if (!actor) return;
+
+    if (pendingActorImageRemoval) {
+      setPendingActorImageRemoval(false);
+      hydrateActorImageDraftFromActor(actor);
+      return;
+    }
+
+    setPendingActorImageRemoval(true);
+    setActorImageLinkValue("");
+    setActorImageUploadPreview("");
+    setActorImageUploadFileName("");
+    setActorImageLinkPreviewError(false);
   };
 
   const openQuickRate = (item) => {
@@ -1717,6 +2081,17 @@ const Account = () => {
           { params: { api_key: process.env.REACT_APP_TMDB_API_KEY } },
         );
         const data = response.data || {};
+        const releasedEpisodeTotal = isTv
+          ? getReleasedEpisodeTotalFromShow(data)
+          : 0;
+        const trackedEpisodes = Number(item.totalEpisodes || 0);
+        const watchedEpisodes = Number(item.watchedEpisodes || 0);
+        const shouldMoveToWantToWatch =
+          isTv &&
+          item.status === "Finished" &&
+          trackedEpisodes > 0 &&
+          watchedEpisodes >= trackedEpisodes &&
+          releasedEpisodeTotal > trackedEpisodes;
 
         const payload = isTv
           ? {
@@ -1732,15 +2107,15 @@ const Account = () => {
                 item.runtime ||
                 null,
               totalEpisodes:
-                Number.isFinite(Number(data.number_of_episodes)) &&
-                Number(data.number_of_episodes) > 0
-                  ? Number(data.number_of_episodes)
+                releasedEpisodeTotal > 0
+                  ? releasedEpisodeTotal
                   : item.totalEpisodes || null,
               totalSeasons:
                 Number.isFinite(Number(data.number_of_seasons)) &&
                 Number(data.number_of_seasons) > 0
                   ? Number(data.number_of_seasons)
                   : item.totalSeasons || null,
+              status: shouldMoveToWantToWatch ? "Watching" : item.status,
             }
           : {
               title: data.title || item.title || "",
@@ -1770,11 +2145,19 @@ const Account = () => {
           {
             ...payload,
             metadataUpdatedAt: serverTimestamp(),
+            ...(isTv ? { newEpisodeStatusCheckedAt: serverTimestamp() } : {}),
+            ...(shouldMoveToWantToWatch
+              ? { updatedAt: serverTimestamp() }
+              : {}),
           },
           { merge: true },
         );
         if (!silent) {
-          setToast(`Refreshed "${item.title}"`);
+          setToast(
+            shouldMoveToWantToWatch
+              ? `New episodes released for "${item.title}". It's now moved to Watching`
+              : `Refreshed "${item.title}"`,
+          );
           setTimeout(() => setToast(null), 2500);
         }
       } catch {
@@ -1856,6 +2239,44 @@ const Account = () => {
         if (refreshingItemKeys[refreshKey]) return false;
 
         const lastMetadataUpdateMs = getTimestampMillis(item.metadataUpdatedAt);
+        const lastAttemptMs = Number(
+          autoRefreshAttemptedAtRef.current[refreshKey] || 0,
+        );
+        const lastCheckedMs = Math.max(lastMetadataUpdateMs, lastAttemptMs);
+        return now - lastCheckedMs >= AUTO_METADATA_REFRESH_COOLDOWN_MS;
+      })
+      .slice(0, AUTO_METADATA_REFRESH_BATCH_SIZE);
+
+    if (!candidates.length) return;
+
+    candidates.forEach((item) => {
+      const refreshKey = `${item.mediaType}-${item.id}`;
+      autoRefreshAttemptedAtRef.current[refreshKey] = now;
+      refreshSavedMetadata(item, { silent: true });
+    });
+  }, [items, refreshingItemKeys, refreshSavedMetadata, user]);
+
+  useEffect(() => {
+    if (!user || !items.length) return;
+
+    const now = Date.now();
+    const candidates = items
+      .filter((item) => {
+        if (item.mediaType !== "tv") return false;
+        if (item.status !== "Finished") return false;
+
+        const trackedEpisodes = Number(item.totalEpisodes || 0);
+        const watchedEpisodes = Number(item.watchedEpisodes || 0);
+        if (trackedEpisodes <= 0 || watchedEpisodes < trackedEpisodes) {
+          return false;
+        }
+
+        const refreshKey = `${item.mediaType}-${item.id}`;
+        if (refreshingItemKeys[refreshKey]) return false;
+
+        const lastMetadataUpdateMs = getTimestampMillis(
+          item.newEpisodeStatusCheckedAt,
+        );
         const lastAttemptMs = Number(
           autoRefreshAttemptedAtRef.current[refreshKey] || 0,
         );
@@ -2275,6 +2696,7 @@ const Account = () => {
       <>
         {renderPaginationControls(sectionKey, currentPage, totalPages)}
         {renderGrid(pageItems)}
+        {renderPaginationControls(sectionKey, currentPage, totalPages)}
       </>
     );
   };
@@ -2293,6 +2715,7 @@ const Account = () => {
       <>
         {renderPaginationControls(sectionKey, currentPage, totalPages)}
         {renderActorGrid(pageItems, { showRemove, showRating })}
+        {renderPaginationControls(sectionKey, currentPage, totalPages)}
       </>
     );
   };
@@ -2996,10 +3419,13 @@ const Account = () => {
       <ActorImageSourceModal
         open={actorImageModal.open}
         actor={actorImageModal.actor}
+        canRemove={actorHasCustomImage}
+        pendingRemove={pendingActorImageRemoval}
         mode={actorImageMode}
         onModeChange={(nextMode) => {
           setActorImageMode(nextMode);
           setActorImageLinkPreviewError(false);
+          setPendingActorImageRemoval(false);
         }}
         linkValue={actorImageLinkValue}
         linkValid={actorImageLinkValid}
@@ -3010,12 +3436,13 @@ const Account = () => {
         onLinkChange={(nextValue) => {
           setActorImageLinkValue(nextValue);
           setActorImageLinkPreviewError(false);
+          setPendingActorImageRemoval(false);
         }}
         onUploadPick={onActorImageUploadPicked}
         onPreviewError={() => setActorImageLinkPreviewError(true)}
         onClose={closeActorImageModal}
         onSave={saveActorImageFromModal}
-        onRemove={removeActorImageFromModal}
+        onRemove={queueActorImageRemovalFromModal}
       />
 
       <AnimatePresence>

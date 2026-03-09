@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
 import toast from "react-hot-toast";
 import { sendPasswordResetEmail } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  deleteField,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { IoMdArrowBack } from "react-icons/io";
 import { useNavigate } from "react-router-dom";
 
@@ -14,6 +20,7 @@ import {
   profileDocPath,
   resolveProfileId,
 } from "../utils/profileFirestorePaths";
+import { uploadImageToCloudinary } from "../utils/cloudinaryUpload";
 
 const createImage = (src) =>
   new Promise((resolve, reject) => {
@@ -56,11 +63,12 @@ const AccountSettings = () => {
 
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [avatarPreview, setAvatarPreview] = useState(
-    selectedProfile?.avatar || selectedProfile?.avatarBase64 || NotFoundPlaceholder,
+    selectedProfile?.avatar || NotFoundPlaceholder,
   );
 
   const [imageSrc, setImageSrc] = useState(null);
   const [pendingGifSrc, setPendingGifSrc] = useState(null);
+  const [pendingGifFile, setPendingGifFile] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedPixels, setCroppedPixels] = useState(null);
@@ -80,10 +88,10 @@ const AccountSettings = () => {
     const profileRef = doc(db, ...profileDocPath(user.email, activeProfileId));
     const unsub = onSnapshot(profileRef, (snap) => {
       const data = snap.data() || {};
-      if (data.avatar || data.avatarBase64) {
-        setAvatarPreview(data.avatar || data.avatarBase64);
-      } else if (selectedProfile?.avatar || selectedProfile?.avatarBase64) {
-        setAvatarPreview(selectedProfile.avatar || selectedProfile.avatarBase64);
+      if (data.avatar) {
+        setAvatarPreview(data.avatar);
+      } else if (selectedProfile?.avatar) {
+        setAvatarPreview(selectedProfile.avatar);
       } else {
         setAvatarPreview(NotFoundPlaceholder);
       }
@@ -118,6 +126,7 @@ const AccountSettings = () => {
       const nextSrc = reader.result;
       if (file.type === "image/gif") {
         setPendingGifSrc(nextSrc);
+        setPendingGifFile(file);
         setImageSrc(null);
         setShowCrop(false);
         setAvatarPreview(nextSrc);
@@ -126,6 +135,7 @@ const AccountSettings = () => {
       }
 
       setPendingGifSrc(null);
+      setPendingGifFile(null);
       setImageSrc(nextSrc);
       setCrop({ x: 0, y: 0 });
       setZoom(1);
@@ -134,18 +144,33 @@ const AccountSettings = () => {
     reader.readAsDataURL(file);
   };
 
-  const persistAvatar = async (base64) => {
+  const persistAvatar = async (source) => {
+    const uploaded = await uploadImageToCloudinary(source, {
+      folder: "alphax/avatars",
+      tags: ["alphax", "avatar"],
+    });
+    if (!uploaded?.url) {
+      throw new Error("Avatar upload failed");
+    }
     const profileRef = doc(db, ...profileDocPath(user.email, activeProfileId));
     await setDoc(
       profileRef,
       {
-        avatar: base64,
-        avatarBase64: base64,
+        avatar: uploaded.url,
+        avatarMeta: {
+          storage: "cloudinary",
+          publicId: uploaded.publicId || null,
+          version: uploaded.version || null,
+          width: uploaded.width || null,
+          height: uploaded.height || null,
+          format: uploaded.format || null,
+        },
+        avatarBase64: deleteField(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
     );
-    setAvatarPreview(base64);
+    setAvatarPreview(uploaded.url);
   };
 
   const saveAvatar = async () => {
@@ -160,10 +185,14 @@ const AccountSettings = () => {
 
     try {
       setSavingAvatar(true);
-      const base64 = await getCroppedCompressedImage(imageSrc, croppedPixels);
-      await persistAvatar(base64);
+      const croppedDataUrl = await getCroppedCompressedImage(
+        imageSrc,
+        croppedPixels,
+      );
+      await persistAvatar(croppedDataUrl);
       setShowCrop(false);
       setImageSrc(null);
+      setPendingGifFile(null);
       toast.success("Profile image updated");
     } catch (err) {
       console.error(err);
@@ -178,14 +207,15 @@ const AccountSettings = () => {
       toast.error("Login required");
       return;
     }
-    if (!pendingGifSrc) {
+    if (!pendingGifSrc || !pendingGifFile) {
       toast.error("Please select a GIF first");
       return;
     }
     try {
       setSavingAvatar(true);
-      await persistAvatar(pendingGifSrc);
+      await persistAvatar(pendingGifFile);
       setPendingGifSrc(null);
+      setPendingGifFile(null);
       toast.success("GIF avatar updated");
     } catch {
       toast.error("Failed to save GIF avatar");
@@ -294,8 +324,11 @@ const AccountSettings = () => {
                       fileInputRef.current?.click();
                     }}
                     disabled={savingAvatar}
-                    className="mt-4 w-full rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed text-white py-2.5 font-semibold transition"
+                    className="mt-4 w-full rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed text-white py-2.5 font-semibold transition inline-flex items-center justify-center gap-2"
                   >
+                    {savingAvatar && (
+                      <span className="loading loading-spinner loading-xs text-white" />
+                    )}
                     {pendingGifSrc
                       ? savingAvatar
                         ? "Saving GIF..."
@@ -412,8 +445,11 @@ const AccountSettings = () => {
                 <button
                   onClick={saveAvatar}
                   disabled={savingAvatar}
-                  className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold"
+                  className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold inline-flex items-center gap-2"
                 >
+                  {savingAvatar && (
+                    <span className="loading loading-spinner loading-xs text-white" />
+                  )}
                   {savingAvatar ? "Saving..." : "Save Avatar"}
                 </button>
               </div>

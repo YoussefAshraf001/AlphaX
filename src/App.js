@@ -67,8 +67,10 @@ function App() {
     let pageTitle = titleByPath[normalizedPath];
     if (!pageTitle) {
       if (normalizedPath.startsWith("/movies/")) pageTitle = "Movie Details";
-      else if (normalizedPath.startsWith("/shows/")) pageTitle = "Series Details";
-      else if (normalizedPath.startsWith("/person/")) pageTitle = "Actor Details";
+      else if (normalizedPath.startsWith("/shows/"))
+        pageTitle = "Series Details";
+      else if (normalizedPath.startsWith("/person/"))
+        pageTitle = "Actor Details";
       else pageTitle = "Browse";
     }
 
@@ -118,123 +120,123 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
-              <Route
-                path="/"
-                element={
+                <Route
+                  path="/"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <Home />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/for-you"
-                element={
+                  }
+                />
+                <Route
+                  path="/for-you"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <ForYou />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/login"
-                element={
-                  <RouteShell>
-                    <Login />
-                  </RouteShell>
-                }
-              />
-              <Route
-                path="/signup"
-                element={
-                  <RouteShell>
-                    <SignUp />
-                  </RouteShell>
-                }
-              />
-              <Route
-                path="/help"
-                element={
-                  <RouteShell>
-                    <HelpPage />
-                  </RouteShell>
-                }
-              />
-              <Route
-                path="/movies"
-                element={
+                  }
+                />
+                <Route
+                  path="/login"
+                  element={
+                    <RouteShell>
+                      <Login />
+                    </RouteShell>
+                  }
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    <RouteShell>
+                      <SignUp />
+                    </RouteShell>
+                  }
+                />
+                <Route
+                  path="/help"
+                  element={
+                    <RouteShell>
+                      <HelpPage />
+                    </RouteShell>
+                  }
+                />
+                <Route
+                  path="/movies"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <Movies />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/movies/:id"
-                element={
+                  }
+                />
+                <Route
+                  path="/movies/:id"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <MovieDetails />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/shows"
-                element={
+                  }
+                />
+                <Route
+                  path="/shows"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <Shows />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/about"
-                element={
-                  <ProfileRouteGate>
-                    <RouteShell>
-                      <About />
-                    </RouteShell>
-                  </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/release-calendar"
-                element={
+                  }
+                />
+                <Route
+                  path="/about"
+                  element={
+                    <ProfileRouteGate>
+                      <RouteShell>
+                        <About />
+                      </RouteShell>
+                    </ProfileRouteGate>
+                  }
+                />
+                <Route
+                  path="/release-calendar"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <ReleaseCalendar />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/shows/:id"
-                element={
+                  }
+                />
+                <Route
+                  path="/shows/:id"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <ShowDetails />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/person/:actorId"
-                element={
+                  }
+                />
+                <Route
+                  path="/person/:actorId"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <ActorDetails />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/my-list"
-                element={
+                  }
+                />
+                <Route
+                  path="/my-list"
+                  element={
                     <ProfileRouteGate>
                       <ProtectedRoute>
                         <RouteShell>
@@ -242,12 +244,15 @@ function App() {
                         </RouteShell>
                       </ProtectedRoute>
                     </ProfileRouteGate>
-                }
-              />
-              <Route path="/watchlist" element={<Navigate to="/my-list" replace />} />
-              <Route
-                path="/accountSettings"
-                element={
+                  }
+                />
+                <Route
+                  path="/watchlist"
+                  element={<Navigate to="/my-list" replace />}
+                />
+                <Route
+                  path="/accountSettings"
+                  element={
                     <ProfileRouteGate>
                       <ProtectedRoute>
                         <RouteShell>
@@ -255,18 +260,18 @@ function App() {
                         </RouteShell>
                       </ProtectedRoute>
                     </ProfileRouteGate>
-                }
-              />
-              <Route
-                path="/search"
-                element={
+                  }
+                />
+                <Route
+                  path="/search"
+                  element={
                     <ProfileRouteGate>
                       <RouteShell>
                         <Search />
                       </RouteShell>
                     </ProfileRouteGate>
-                }
-              />
+                  }
+                />
               </Routes>
             </AnimatePresence>
           </SavedContentProvider>

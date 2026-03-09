@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   collection,
+  deleteField,
   deleteDoc,
   doc,
   onSnapshot,
@@ -16,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { UserAuth } from "./AuthContext";
+import { isCloudinaryUrl } from "../utils/cloudinaryUpload";
 
 const ProfileContext = createContext(null);
 
@@ -26,8 +28,8 @@ const defaultProfileFromUser = (user) => ({
   name: user?.displayName || "Main",
   username: user?.displayName || "main",
   displayName: user?.displayName || "Main",
-  avatar: user?.photoURL || null,
-  avatarBase64: user?.photoURL || null,
+  avatar: null,
+  avatarMeta: null,
   locked: false,
   pinCode: null,
 });
@@ -66,7 +68,7 @@ export const ProfileContextProvider = ({ children }) => {
               username: fallback.username,
               displayName: fallback.displayName,
               avatar: fallback.avatar,
-              avatarBase64: fallback.avatarBase64,
+              avatarMeta: null,
               locked: false,
               pinCode: null,
               createdAt: serverTimestamp(),
@@ -85,8 +87,11 @@ export const ProfileContextProvider = ({ children }) => {
               name: data.name || data.displayName || "Profile",
               username: data.username || data.name || "profile",
               displayName: data.displayName || data.name || "Profile",
-              avatar: data.avatar || data.avatarBase64 || null,
-              avatarBase64: data.avatarBase64 || data.avatar || null,
+              avatar: isCloudinaryUrl(data.avatar) ? data.avatar : null,
+              avatarMeta:
+                data.avatarMeta && typeof data.avatarMeta === "object"
+                  ? data.avatarMeta
+                  : null,
               locked: Boolean(data.locked),
               pinCode: data.pinCode || null,
               createdAt: data.createdAt,
@@ -141,8 +146,15 @@ export const ProfileContextProvider = ({ children }) => {
     if (!trimmed) return;
     const avatarValue =
       typeof profileInput === "object" &&
-      typeof profileInput?.avatarBase64 === "string"
-        ? profileInput.avatarBase64
+      typeof profileInput?.avatar === "string" &&
+      isCloudinaryUrl(profileInput.avatar)
+        ? profileInput.avatar
+        : null;
+    const avatarMeta =
+      typeof profileInput === "object" &&
+      profileInput?.avatarMeta &&
+      typeof profileInput.avatarMeta === "object"
+        ? profileInput.avatarMeta
         : null;
     const pin =
       typeof profileInput === "object" &&
@@ -164,7 +176,8 @@ export const ProfileContextProvider = ({ children }) => {
         username: trimmed.slice(0, 24),
         displayName: trimmed.slice(0, 24),
         avatar: avatarValue,
-        avatarBase64: avatarValue,
+        avatarMeta: avatarMeta || null,
+        avatarBase64: deleteField(),
         locked,
         pinCode: locked ? pin : null,
         createdAt: serverTimestamp(),
@@ -181,7 +194,13 @@ export const ProfileContextProvider = ({ children }) => {
       const rawName = String(updates.name || "").trim();
       const cleanName = rawName.slice(0, 24);
       const avatarValue =
-        typeof updates.avatarBase64 === "string" ? updates.avatarBase64 : null;
+        typeof updates.avatar === "string" && isCloudinaryUrl(updates.avatar)
+          ? updates.avatar
+          : null;
+      const avatarMeta =
+        updates?.avatarMeta && typeof updates.avatarMeta === "object"
+          ? updates.avatarMeta
+          : null;
       const pinCode =
         typeof updates.pinCode === "string" && updates.pinCode.trim()
           ? updates.pinCode.replace(/\D/g, "").slice(0, 4)
@@ -199,7 +218,8 @@ export const ProfileContextProvider = ({ children }) => {
               }
             : {}),
           avatar: avatarValue,
-          avatarBase64: avatarValue,
+          avatarMeta: avatarMeta || null,
+          avatarBase64: deleteField(),
           locked,
           pinCode: locked ? pinCode : null,
           updatedAt: serverTimestamp(),

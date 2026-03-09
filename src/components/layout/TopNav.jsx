@@ -137,7 +137,7 @@ const TopNav = () => {
       return;
     }
     setAccountAvatar(
-      selectedProfile.avatar || selectedProfile.avatarBase64 || null,
+      selectedProfile.avatar || null,
     );
   }, [user?.email, selectedProfile]);
 

@@ -8,6 +8,7 @@ import { FaLock } from "react-icons/fa";
 import { UserAuth } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
 import NotFoundPlaceholder from "../assets/notFound-Placeholder.jpg";
+import { uploadImageToCloudinary } from "../utils/cloudinaryUpload";
 
 const colorFromId = (id = "") => {
   const palette = ["#1f7aff", "#e50914", "#2ca17a", "#9b59b6", "#f39c12"];
@@ -75,9 +76,12 @@ const WhoIsWatching = () => {
   const [editingProfile, setEditingProfile] = useState(null);
   const [editName, setEditName] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
+  const [editAvatarMeta, setEditAvatarMeta] = useState(null);
+  const [editAvatarUploadFile, setEditAvatarUploadFile] = useState(null);
   const [editLock, setEditLock] = useState(false);
   const [editPin, setEditPin] = useState("");
   const [pinTarget, setPinTarget] = useState(null);
+  const [pendingManageProfile, setPendingManageProfile] = useState(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [pendingProfileSelection, setPendingProfileSelection] = useState(null);
   const [rawImageSrc, setRawImageSrc] = useState(null);
@@ -85,6 +89,7 @@ const WhoIsWatching = () => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedPixels, setCroppedPixels] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
   const pinInputRefs = useRef([]);
   const fileInputRef = useRef(null);
   const canDeleteProfile = profiles.length > 1;
@@ -96,16 +101,25 @@ const WhoIsWatching = () => {
 
   const openProfile = (profile) => {
     if (manageMode) {
+      if (profile.locked) {
+        setPendingManageProfile(profile);
+        setPinTarget(profile);
+        setEnteredPin("");
+        return;
+      }
       setEditorMode("edit");
       setEditingProfile(profile);
       setEditName(profile.name || "");
-      setEditAvatar(profile.avatarBase64 || profile.avatar || "");
+      setEditAvatar(profile.avatar || "");
+      setEditAvatarMeta(profile.avatarMeta || null);
+      setEditAvatarUploadFile(null);
       setEditLock(Boolean(profile.locked));
       setEditPin(String(profile.pinCode || ""));
       return;
     }
 
     if (profile.locked) {
+      setPendingManageProfile(null);
       setPinTarget(profile);
       setEnteredPin("");
       return;
@@ -128,6 +142,8 @@ const WhoIsWatching = () => {
     setEditingProfile(null);
     setEditName("");
     setEditAvatar("");
+    setEditAvatarMeta(null);
+    setEditAvatarUploadFile(null);
     setEditLock(false);
     setEditPin("");
     setRawImageSrc(null);
@@ -142,6 +158,8 @@ const WhoIsWatching = () => {
     setEditingProfile(null);
     setEditName("");
     setEditAvatar("");
+    setEditAvatarMeta(null);
+    setEditAvatarUploadFile(null);
     setEditLock(false);
     setEditPin("");
   };
@@ -159,9 +177,12 @@ const WhoIsWatching = () => {
       if (!base64) return;
       if (file.type === "image/gif") {
         setEditAvatar(base64);
+        setEditAvatarMeta(null);
+        setEditAvatarUploadFile(file);
         toast("GIF applied without crop", { icon: "i" });
         return;
       }
+      setEditAvatarUploadFile(null);
       setRawImageSrc(base64);
       setCrop({ x: 0, y: 0 });
       setZoom(1);
@@ -181,6 +202,8 @@ const WhoIsWatching = () => {
         croppedPixels,
       );
       setEditAvatar(croppedBase64);
+      setEditAvatarMeta(null);
+      setEditAvatarUploadFile(null);
       setShowCrop(false);
       setRawImageSrc(null);
       toast.success("Preview updated");
@@ -189,7 +212,62 @@ const WhoIsWatching = () => {
     }
   };
 
+  const resolveAvatarForSave = async () => {
+    if (editAvatarUploadFile instanceof File) {
+      const uploaded = await uploadImageToCloudinary(editAvatarUploadFile, {
+        folder: "alphax/avatars",
+        tags: ["alphax", "avatar", "profile"],
+      });
+      if (!uploaded?.url) {
+        throw new Error("Avatar upload failed");
+      }
+      return {
+        url: uploaded.url,
+        meta: {
+          storage: "cloudinary",
+          publicId: uploaded.publicId || null,
+          version: uploaded.version || null,
+          width: uploaded.width || null,
+          height: uploaded.height || null,
+          format: uploaded.format || null,
+        },
+      };
+    }
+
+    const candidate = String(editAvatar || "").trim();
+    if (!candidate) return { url: null, meta: null };
+    if (!candidate.startsWith("data:image/")) {
+      return {
+        url: candidate,
+        meta:
+          editAvatarMeta && typeof editAvatarMeta === "object"
+            ? editAvatarMeta
+            : null,
+      };
+    }
+
+    const uploaded = await uploadImageToCloudinary(candidate, {
+      folder: "alphax/avatars",
+      tags: ["alphax", "avatar", "profile"],
+    });
+    if (!uploaded?.url) {
+      throw new Error("Avatar upload failed");
+    }
+    return {
+      url: uploaded.url,
+      meta: {
+        storage: "cloudinary",
+        publicId: uploaded.publicId || null,
+        version: uploaded.version || null,
+        width: uploaded.width || null,
+        height: uploaded.height || null,
+        format: uploaded.format || null,
+      },
+    };
+  };
+
   const saveProfileEdits = async () => {
+    if (savingProfile) return;
     const trimmed = editName.trim();
     if (!trimmed) {
       toast.error("Profile name is required");
@@ -202,26 +280,45 @@ const WhoIsWatching = () => {
     }
 
     if (editorMode === "create") {
-      await addProfile({
-        name: trimmed,
-        avatarBase64: editAvatar || null,
-        locked: editLock,
-        pinCode: editPin,
-      });
-      closeEditor();
-      toast.success("Profile added");
+      try {
+        setSavingProfile(true);
+        const avatarValue = await resolveAvatarForSave();
+        await addProfile({
+          name: trimmed,
+          avatar: avatarValue.url,
+          avatarMeta: avatarValue.meta,
+          locked: editLock,
+          pinCode: editPin,
+        });
+        closeEditor();
+        toast.success("Profile added");
+      } catch {
+        toast.error("Failed to save profile image");
+      } finally {
+        setSavingProfile(false);
+      }
       return;
     }
 
     if (!editingProfile?.id) return;
-    await updateProfile(editingProfile.id, {
-      name: trimmed,
-      avatarBase64: editAvatar || null,
-      locked: editLock,
-      pinCode: editPin,
-    });
-    closeEditor();
-    toast.success("Profile updated");
+    try {
+      setSavingProfile(true);
+      const avatarValue = await resolveAvatarForSave();
+      await updateProfile(editingProfile.id, {
+        name: trimmed,
+        avatar: avatarValue.url,
+        avatarMeta: avatarValue.meta,
+        locked: editLock,
+        pinCode: editPin,
+      });
+      setEditAvatarUploadFile(null);
+      closeEditor();
+      toast.success("Profile updated");
+    } catch {
+      toast.error("Failed to save profile image");
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const removeProfile = async () => {
@@ -254,6 +351,26 @@ const WhoIsWatching = () => {
       return;
     }
 
+    if (
+      pendingManageProfile &&
+      String(pendingManageProfile.id) === String(pinTarget.id)
+    ) {
+      setEditorMode("edit");
+      setEditingProfile(pinTarget);
+      setEditName(pinTarget.name || "");
+      setEditAvatar(pinTarget.avatar || "");
+      setEditAvatarMeta(pinTarget.avatarMeta || null);
+      setEditAvatarUploadFile(null);
+      setEditLock(Boolean(pinTarget.locked));
+      setEditPin(String(pinTarget.pinCode || ""));
+      setPinTarget(null);
+      setPendingManageProfile(null);
+      setEnteredPin("");
+      return;
+    }
+
+    setPinTarget(null);
+    setEnteredPin("");
     const didSelect = selectProfile(pinTarget);
     if (didSelect) {
       navigate(returnPath, { replace: true });
@@ -552,15 +669,24 @@ const WhoIsWatching = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={closeEditor}
+                    disabled={savingProfile}
                     className="px-4 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={saveProfileEdits}
-                    className="px-4 py-2 rounded-lg text-sm bg-white text-black hover:bg-white/90"
+                    disabled={savingProfile}
+                    className="px-4 py-2 rounded-lg text-sm bg-white text-black hover:bg-white/90 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
                   >
-                    {editorMode === "create" ? "Create" : "Save"}
+                    {savingProfile && (
+                      <span className="loading loading-spinner loading-xs text-black" />
+                    )}
+                    {savingProfile
+                      ? "Saving..."
+                      : editorMode === "create"
+                        ? "Create"
+                        : "Save"}
                   </button>
                 </div>
               </div>
@@ -644,7 +770,11 @@ const WhoIsWatching = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[1200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setPinTarget(null)}
+            onClick={() => {
+              setPinTarget(null);
+              setPendingManageProfile(null);
+              setEnteredPin("");
+            }}
           >
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -665,12 +795,16 @@ const WhoIsWatching = () => {
                     ref={(el) => {
                       pinInputRefs.current[idx] = el;
                     }}
-                    value={enteredPin[idx] || ""}
+                    value={enteredPin[idx] ? "*" : ""}
                     onChange={(e) => handlePinDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handlePinDigitKeyDown(idx, e)}
                     inputMode="numeric"
-                    autoComplete="one-time-code"
+                    autoComplete="off"
+                    name={`profile-pin-digit-${idx}`}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     maxLength={1}
+                    type="password"
                     className="w-12 h-12 text-center text-xl rounded-lg border border-white/20 bg-white/5 outline-none focus:border-red-500"
                   />
                 ))}
@@ -681,7 +815,11 @@ const WhoIsWatching = () => {
 
               <div className="mt-4 flex justify-end">
                 <button
-                  onClick={() => setPinTarget(null)}
+                  onClick={() => {
+                    setPinTarget(null);
+                    setPendingManageProfile(null);
+                    setEnteredPin("");
+                  }}
                   className="px-4 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20"
                 >
                   Cancel

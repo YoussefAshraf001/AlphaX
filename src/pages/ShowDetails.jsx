@@ -758,13 +758,13 @@ const ShowDetails = () => {
         await setDoc(
           ref,
           {
-            status: "Want to Watch",
+            status: "Watching",
             totalEpisodes: releasedEpisodeTotal,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
         );
-        toast(`New episodes detected. Moved to "Want to Watch".`, {
+        toast(`New episodes detected. Moved to "Watching".`, {
           icon: "i",
         });
       } catch {
