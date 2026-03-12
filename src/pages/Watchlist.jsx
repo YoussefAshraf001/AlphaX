@@ -64,7 +64,7 @@ const DEFAULT_FILTERS = {
   sortFilter: "recent",
 };
 
-const ITEMS_PER_PAGE = 24;
+const ITEMS_PER_PAGE = 28;
 const AUTO_METADATA_REFRESH_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const AUTO_METADATA_REFRESH_BATCH_SIZE = 3;
 
@@ -728,6 +728,121 @@ const QuickRateModal = ({
   );
 };
 
+const QuickProgressModal = ({
+  open,
+  item,
+  watched,
+  total,
+  saving,
+  onChange,
+  onClose,
+}) => {
+  const [value, setValue] = useState(watched || 0);
+
+  useEffect(() => {
+    setValue(watched || 0);
+  }, [watched]);
+
+  if (!open || !item) return null;
+
+  const increment = () => {
+    if (value < total) {
+      const next = value + 1;
+      setValue(next);
+      onChange(next);
+    }
+  };
+
+  const decrement = () => {
+    if (value > 0) {
+      const next = value - 1;
+      setValue(next);
+      onChange(next);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.98 }}
+          className="relative w-full max-w-xl rounded-2xl border border-white/10 bg-[#111] p-6 md:p-7"
+        >
+          {saving && (
+            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+              <ImSpinner2 className="animate-spin text-white text-xl" />
+            </div>
+          )}
+
+          {/* HEADER */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-14 h-20 rounded overflow-hidden bg-white/10">
+              {item.poster && (
+                <img
+                  src={`https://image.tmdb.org/t/p/w185${item.poster}`}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs uppercase text-white/50">
+                Episode Progress
+              </p>
+              <h3 className="text-base font-semibold text-white">
+                {item.title}
+              </h3>
+            </div>
+          </div>
+
+          {/* COUNTER */}
+          <div className="flex items-center justify-center gap-6 my-6">
+            <button
+              onClick={decrement}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20"
+            >
+              -
+            </button>
+
+            <div className="text-center">
+              <p className="text-3xl font-bold">
+                {value}
+                <span className="text-white/40 text-lg"> / {total}</span>
+              </p>
+              <p className="text-xs text-white/50">Episodes watched</p>
+            </div>
+
+            <button
+              onClick={increment}
+              className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-500"
+            >
+              +
+            </button>
+          </div>
+
+          {/* CLOSE */}
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm rounded-md bg-white/10 hover:bg-white/20"
+            >
+              Close
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
 const ActorImageSourceModal = ({
   open,
   actor,
@@ -1003,6 +1118,8 @@ const Account = () => {
   const [removeConfirm, setRemoveConfirm] = useState(null);
   const [quickRate, setQuickRate] = useState(null);
   const [savingQuickRate, setSavingQuickRate] = useState(false);
+  const [quickProgress, setQuickProgress] = useState(null);
+  const [savingProgress, setSavingProgress] = useState(false);
   const [refreshingItemKeys, setRefreshingItemKeys] = useState({});
   const [savingActorImageId, setSavingActorImageId] = useState(null);
   const [refreshingActorImageId, setRefreshingActorImageId] = useState(null);
@@ -2051,6 +2168,29 @@ const Account = () => {
     }
   };
 
+  const saveProgress = async (item, watched) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    setSavingProgress(true);
+
+    const ref = doc(
+      db,
+      ...profileSavedItemPath(user.email, activeProfileId, "shows", item.id),
+    );
+
+    await setDoc(
+      ref,
+      {
+        watchedEpisodes: watched,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    setSavingProgress(false);
+  };
+
   const refreshSavedMetadata = useCallback(
     async (item, options = {}) => {
       const { silent = false } = options;
@@ -2399,7 +2539,7 @@ const Account = () => {
       variants={gridStagger}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-4"
+      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4"
     >
       {list.map((item) => (
         <motion.div
@@ -2614,7 +2754,16 @@ const Account = () => {
                   </button>
 
                   {item.mediaType === "tv" && (
-                    <div className="space-y-1">
+                    <div
+                      onClick={() => {
+                        setQuickProgress({
+                          item,
+                          watched: item.watchedEpisodes || 0,
+                          total: item.totalEpisodes || 0,
+                        });
+                      }}
+                      className="space-y-1 cursor-pointer"
+                    >
                       <p className="text-[11px] text-white/70">
                         {progressLabel ||
                           (item.status === "Finished" ||
@@ -3416,6 +3565,19 @@ const Account = () => {
         onClose={closeQuickRate}
         saving={savingQuickRate}
       />
+
+      <QuickProgressModal
+        open={!!quickProgress}
+        item={quickProgress?.item}
+        watched={quickProgress?.watched}
+        total={quickProgress?.total}
+        saving={savingProgress}
+        onChange={(value) => {
+          saveProgress(quickProgress.item, value);
+        }}
+        onClose={() => setQuickProgress(null)}
+      />
+
       <ActorImageSourceModal
         open={actorImageModal.open}
         actor={actorImageModal.actor}
