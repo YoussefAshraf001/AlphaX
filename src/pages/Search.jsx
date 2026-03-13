@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { ImSpinner2 } from "react-icons/im";
-import { FaHeart, FaRegHeart } from "react-icons/fa";
+import { FaHeart, FaRegHeart, FaTrash } from "react-icons/fa";
 import {
   collection,
   deleteDoc,
@@ -12,6 +12,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
+import { AnimatePresence, motion } from "framer-motion";
 
 import NotFoundPlaceholder from "../assets/notFound-Placeholder.jpg";
 import { addRecentSearch, getRecentSearches } from "../utils/recentSearches";
@@ -21,6 +22,8 @@ import { useProfile } from "../context/ProfileContext";
 import { useSavedContent } from "../context/SavedContentContext";
 import PersonalRating from "../components/actions/PersonalRating";
 import {
+  profileLikedActorItemPath,
+  profileLikedActorsCollectionPath,
   profileRatingItemPath,
   profileRatingsCollectionPath,
   profileSavedItemPath,
@@ -42,6 +45,12 @@ const SEARCH_FILTERS = [
   { key: "person", label: "People" },
 ];
 
+const SORT_OPTIONS = [
+  { key: "best-match", label: "Best Match" },
+  { key: "name", label: "Name" },
+  { key: "release-date", label: "Release Date" },
+];
+
 const formatKnownFor = (item) => {
   if (!Array.isArray(item?.known_for) || item.known_for.length === 0) return "";
   return item.known_for
@@ -49,6 +58,53 @@ const formatKnownFor = (item) => {
     .filter(Boolean)
     .slice(0, 3)
     .join(", ");
+};
+const RemoveConfirmModal = ({ open, item, onCancel, onConfirm }) => {
+  if (!open || !item) return null;
+
+  const isPerson = item.mediaType === "person";
+  const title = item.title || item.name || "this entry";
+  const typeLabel =
+    item.mediaType === "movie"
+      ? "movie"
+      : item.mediaType === "tv"
+        ? "show"
+        : "person";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111] p-5 shadow-2xl">
+        <h2 className="text-lg font-semibold text-white">
+          Remove From Library?
+        </h2>
+        <p className="mt-2 text-sm text-white/65">
+          This action will remove{" "}
+          <span className="text-white font-bold">{title}</span>{" "}
+          {isPerson
+            ? "from your saved people data"
+            : `from your saved ${typeLabel}s including rating and status`}
+          ?
+        </p>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md bg-white/10 px-4 py-2 text-sm text-white/85 transition hover:bg-white/20"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm text-white transition hover:bg-red-500"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const Search = () => {
@@ -63,11 +119,16 @@ const Search = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
   const [ratingsMap, setRatingsMap] = useState({});
+  const [likedActorsMap, setLikedActorsMap] = useState({});
+  const [actorRatingsMap, setActorRatingsMap] = useState({});
   const [localStatusMap, setLocalStatusMap] = useState({});
   const [localFavouriteMap, setLocalFavouriteMap] = useState({});
   const [localRatingMap, setLocalRatingMap] = useState({});
   const [localNotInterestedMap, setLocalNotInterestedMap] = useState({});
   const [activeFilter, setActiveFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("best-match");
+  const [sortDirection, setSortDirection] = useState("desc");
+  const [removeTarget, setRemoveTarget] = useState(null);
 
   useEffect(() => {
     setRecentSearches(getRecentSearches(recentSearchScope));
@@ -81,6 +142,8 @@ const Search = () => {
   useEffect(() => {
     if (!user?.email) {
       setRatingsMap({});
+      setLikedActorsMap({});
+      setActorRatingsMap({});
       return;
     }
 
@@ -91,6 +154,14 @@ const Search = () => {
     const showsRef = collection(
       db,
       ...profileRatingsCollectionPath(user.email, activeProfileId, "shows"),
+    );
+    const actorsRef = collection(
+      db,
+      ...profileLikedActorsCollectionPath(user.email, activeProfileId),
+    );
+    const actorRatingsRef = collection(
+      db,
+      ...profileRatingsCollectionPath(user.email, activeProfileId, "actors"),
     );
 
     let movieRatings = {};
@@ -104,7 +175,9 @@ const Search = () => {
       movieRatings = {};
       snap.docs.forEach((entry) => {
         const data = entry.data() || {};
-        movieRatings[`movie:${Number(data.id || entry.id)}`] = Number(data.value || 0);
+        movieRatings[`movie:${Number(data.id || entry.id)}`] = Number(
+          data.value || 0,
+        );
       });
       sync();
     });
@@ -113,14 +186,36 @@ const Search = () => {
       showRatings = {};
       snap.docs.forEach((entry) => {
         const data = entry.data() || {};
-        showRatings[`tv:${Number(data.id || entry.id)}`] = Number(data.value || 0);
+        showRatings[`tv:${Number(data.id || entry.id)}`] = Number(
+          data.value || 0,
+        );
       });
       sync();
+    });
+
+    const unsubActors = onSnapshot(actorsRef, (snap) => {
+      const next = {};
+      snap.docs.forEach((entry) => {
+        const data = entry.data() || {};
+        next[String(data.id || entry.id)] = true;
+      });
+      setLikedActorsMap(next);
+    });
+
+    const unsubActorRatings = onSnapshot(actorRatingsRef, (snap) => {
+      const next = {};
+      snap.docs.forEach((entry) => {
+        const data = entry.data() || {};
+        next[String(data.id || entry.id)] = Number(data.value || 0);
+      });
+      setActorRatingsMap(next);
     });
 
     return () => {
       unsubMovies();
       unsubShows();
+      unsubActors();
+      unsubActorRatings();
     };
   }, [user?.email, activeProfileId]);
 
@@ -130,6 +225,8 @@ const Search = () => {
     setLocalRatingMap({});
     setLocalNotInterestedMap({});
     setActiveFilter("all");
+    setSortBy("best-match");
+    setSortDirection("desc");
   }, [query]);
 
   useEffect(() => {
@@ -201,6 +298,39 @@ const Search = () => {
     if (activeFilter === "all") return results;
     return results.filter((item) => item.mediaType === activeFilter);
   }, [results, activeFilter]);
+
+  const sortedResults = useMemo(() => {
+    const items = [...filteredResults];
+    const directionFactor = sortDirection === "asc" ? 1 : -1;
+
+    if (sortBy === "name") {
+      return items.sort((a, b) => {
+        const aName = String(a.title || a.name || "")
+          .trim()
+          .toLowerCase();
+        const bName = String(b.title || b.name || "")
+          .trim()
+          .toLowerCase();
+        return aName.localeCompare(bName) * directionFactor;
+      });
+    }
+
+    if (sortBy === "release-date") {
+      return items.sort((a, b) => {
+        const aDate = Date.parse(a.release_date || a.first_air_date || "");
+        const bDate = Date.parse(b.release_date || b.first_air_date || "");
+        const aValid = Number.isFinite(aDate);
+        const bValid = Number.isFinite(bDate);
+
+        if (!aValid && !bValid) return 0;
+        if (!aValid) return 1;
+        if (!bValid) return -1;
+        return (aDate - bDate) * directionFactor;
+      });
+    }
+
+    return items;
+  }, [filteredResults, sortBy, sortDirection]);
 
   const filterCounts = useMemo(
     () =>
@@ -290,6 +420,19 @@ const Search = () => {
     return Boolean(savedMap[key]?.notInterested);
   };
 
+  const hasDatabaseEntry = (item) => {
+    if (item.mediaType === "person") {
+      const actorKey = String(item.id);
+      return (
+        Boolean(likedActorsMap[actorKey]) ||
+        Number(actorRatingsMap[actorKey] || 0) > 0
+      );
+    }
+
+    const key = getItemKey(item);
+    return Boolean(savedMap[key]) || getCurrentRating(item) > 0;
+  };
+
   const saveStatus = async (item, nextStatus) => {
     if (!user?.email) {
       toast.error("Login required");
@@ -324,7 +467,9 @@ const Search = () => {
           rating: item.vote_average ?? null,
           mediaType,
           status: nextStatus || null,
-          notInterested: shouldClearNotInterested ? false : getCurrentNotInterested(item),
+          notInterested: shouldClearNotInterested
+            ? false
+            : getCurrentNotInterested(item),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -413,7 +558,12 @@ const Search = () => {
     try {
       const ref = doc(
         db,
-        ...profileRatingItemPath(user.email, activeProfileId, ratingTypeDoc, item.id),
+        ...profileRatingItemPath(
+          user.email,
+          activeProfileId,
+          ratingTypeDoc,
+          item.id,
+        ),
       );
       if (clamped === 0) {
         await deleteDoc(ref);
@@ -435,14 +585,22 @@ const Search = () => {
         const savedTypeDoc = mediaType === "tv" ? "shows" : "movies";
         const savedRef = doc(
           db,
-          ...profileSavedItemPath(user.email, activeProfileId, savedTypeDoc, item.id),
+          ...profileSavedItemPath(
+            user.email,
+            activeProfileId,
+            savedTypeDoc,
+            item.id,
+          ),
         );
         await setDoc(savedRef, { notInterested: false }, { merge: true });
       }
     } catch {
       setLocalRatingMap((prev) => ({ ...prev, [key]: prevRating }));
       if (clamped > 0 && prevNotInterested) {
-        setLocalNotInterestedMap((prev) => ({ ...prev, [key]: prevNotInterested }));
+        setLocalNotInterestedMap((prev) => ({
+          ...prev,
+          [key]: prevNotInterested,
+        }));
       }
       toast.error("Failed to save rating");
     }
@@ -494,7 +652,12 @@ const Search = () => {
         const ratingTypeDoc = mediaType === "tv" ? "shows" : "movies";
         const ratingRef = doc(
           db,
-          ...profileRatingItemPath(user.email, activeProfileId, ratingTypeDoc, item.id),
+          ...profileRatingItemPath(
+            user.email,
+            activeProfileId,
+            ratingTypeDoc,
+            item.id,
+          ),
         );
         await deleteDoc(ratingRef);
         setLocalRatingMap((state) => ({ ...state, [key]: 0 }));
@@ -504,7 +667,70 @@ const Search = () => {
       toast.error("Failed to update preference");
     }
   };
+  const removeFromDatabase = async (item) => {
+    if (!item) return;
+    if (!user?.email) {
+      toast.error("Login required");
+      return;
+    }
 
+    try {
+      if (item.mediaType === "person") {
+        const likedRef = doc(
+          db,
+          ...profileLikedActorItemPath(user.email, activeProfileId, item.id),
+        );
+        const ratingRef = doc(
+          db,
+          ...profileRatingItemPath(
+            user.email,
+            activeProfileId,
+            "actors",
+            item.id,
+          ),
+        );
+
+        await Promise.all([deleteDoc(likedRef), deleteDoc(ratingRef)]);
+        toast.success(`Removed ${item.name || "person"} from your database`);
+      } else {
+        const typeDoc = item.mediaType === "tv" ? "shows" : "movies";
+        const savedRef = doc(
+          db,
+          ...profileSavedItemPath(
+            user.email,
+            activeProfileId,
+            typeDoc,
+            item.id,
+          ),
+        );
+        const ratingRef = doc(
+          db,
+          ...profileRatingItemPath(
+            user.email,
+            activeProfileId,
+            typeDoc,
+            item.id,
+          ),
+        );
+
+        await Promise.all([deleteDoc(savedRef), deleteDoc(ratingRef)]);
+
+        const key = getItemKey(item);
+        setLocalStatusMap((prev) => ({ ...prev, [key]: "" }));
+        setLocalFavouriteMap((prev) => ({ ...prev, [key]: false }));
+        setLocalRatingMap((prev) => ({ ...prev, [key]: 0 }));
+        setLocalNotInterestedMap((prev) => ({ ...prev, [key]: false }));
+        toast.success(
+          `Removed ${item.title || item.name || "title"} from your database`,
+        );
+      }
+    } catch {
+      toast.error("Failed to remove item");
+      return;
+    }
+
+    setRemoveTarget(null);
+  };
   return (
     <div className="pt-24 pb-12 px-6 lg:px-10 min-h-screen bg-[#0b0b0b] text-white">
       <div className="max-w-6xl mx-auto">
@@ -538,7 +764,7 @@ const Search = () => {
             )}
 
             {!!query && results.length > 0 && (
-              <div className="mt-6 flex flex-wrap gap-2">
+              <div className="mt-6 flex flex-wrap items-center gap-2">
                 {SEARCH_FILTERS.map((filter) => (
                   <button
                     key={filter.key}
@@ -553,169 +779,229 @@ const Search = () => {
                     {filter.label} ({filterCounts[filter.key]})
                   </button>
                 ))}
+                <div className="ml-auto flex items-center gap-2 text-xs text-white/60">
+                  <span className="hidden sm:inline">Sort by</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white outline-none transition hover:bg-white/15"
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <option
+                        key={option.key}
+                        value={option.key}
+                        className="bg-[#111] text-white"
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {sortBy !== "best-match" && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSortDirection((prev) =>
+                          prev === "asc" ? "desc" : "asc",
+                        )
+                      }
+                      className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15"
+                      title={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}
+                    >
+                      {sortDirection === "asc" ? "Asc" : "Desc"}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
             <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredResults.map((item) => {
-              const mediaLabel =
-                item.mediaType === "movie"
-                  ? "Movie"
-                  : item.mediaType === "tv"
-                    ? "Series"
-                    : "Person";
-              const href =
-                item.mediaType === "movie"
-                  ? `/movies/${item.id}`
-                  : item.mediaType === "tv"
-                    ? `/shows/${item.id}`
-                    : `/person/${item.id}`;
-              const imagePath = item.poster_path || item.profile_path;
-              const subtitle =
-                item.mediaType === "movie"
-                  ? item.release_date?.slice(0, 4) || "Release date unknown"
-                  : item.mediaType === "tv"
-                    ? item.first_air_date?.slice(0, 4) || "First air date unknown"
-                    : item.known_for_department || "Known for";
-              const knownForText = formatKnownFor(item);
-              const description =
-                item.overview?.trim() ||
-                (item.mediaType === "person"
-                  ? knownForText && `Known for: ${knownForText}`
-                  : "") ||
-                "No description available.";
+              {sortedResults.map((item) => {
+                const mediaLabel =
+                  item.mediaType === "movie"
+                    ? "Movie"
+                    : item.mediaType === "tv"
+                      ? "Series"
+                      : "Person";
+                const href =
+                  item.mediaType === "movie"
+                    ? `/movies/${item.id}`
+                    : item.mediaType === "tv"
+                      ? `/shows/${item.id}`
+                      : `/person/${item.id}`;
+                const imagePath = item.poster_path || item.profile_path;
+                const subtitle =
+                  item.mediaType === "movie"
+                    ? item.release_date?.slice(0, 4) || "Release date unknown"
+                    : item.mediaType === "tv"
+                      ? item.first_air_date?.slice(0, 4) ||
+                        "First air date unknown"
+                      : item.known_for_department || "Known for";
+                const knownForText = formatKnownFor(item);
+                const description =
+                  item.overview?.trim() ||
+                  (item.mediaType === "person"
+                    ? knownForText && `Known for: ${knownForText}`
+                    : "") ||
+                  "No description available.";
+                const inLibrary = hasDatabaseEntry(item);
 
-              return (
-                <article
-                  key={`${item.mediaType}-${item.id}`}
-                  className="relative rounded-xl border border-white/10 bg-white/[0.03] p-3"
-                >
-                  {isManageable(item) && (
-                    <button
-                      type="button"
-                      onClick={() => toggleFavourite(item)}
-                      title={
-                        isUnreleased(item)
-                          ? "Favourites unlock on release"
-                          : getCurrentFavourite(item)
-                            ? "Remove favourite"
-                            : "Add favourite"
-                      }
-                      className={`absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full border flex items-center justify-center transition ${
-                        isUnreleased(item)
-                          ? "bg-black/60 border-white/25 text-white/40"
-                          : getCurrentFavourite(item)
-                            ? "bg-red-600/90 border-red-300/60 text-white"
-                            : "bg-black/65 border-white/30 text-white/85 hover:bg-black/85"
-                      }`}
-                    >
-                      {getCurrentFavourite(item) ? (
-                        <FaHeart size={12} />
-                      ) : (
-                        <FaRegHeart size={12} />
-                      )}
-                    </button>
-                  )}
-                  <Link
-                    to={href}
-                    className="group flex gap-3 hover:bg-white/[0.02] rounded-lg transition"
+                return (
+                  <article
+                    key={`${item.mediaType}-${item.id}`}
+                    className="relative rounded-xl border border-white/10 bg-white/[0.03] p-3"
                   >
-                    <img
-                      src={
-                        imagePath
-                          ? `https://image.tmdb.org/t/p/w154${imagePath}`
-                          : NotFoundPlaceholder
-                      }
-                      alt=""
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = NotFoundPlaceholder;
-                      }}
-                      className="w-16 h-24 rounded object-cover bg-white/10 shrink-0"
-                    />
-
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white truncate group-hover:text-red-300 transition">
-                        {item.title || item.name}
-                      </p>
-                      <p className="mt-1 text-xs text-white/50 uppercase tracking-wide">
-                        {mediaLabel}
-                      </p>
-                      {subtitle && (
-                        <p className="mt-1 text-xs text-white/65 truncate">
-                          {subtitle}
-                        </p>
-                      )}
-                      <p className="mt-2 text-xs text-white/60 line-clamp-3">
-                        {description}
-                      </p>
-                    </div>
-                  </Link>
-
-                  {isManageable(item) ? (
-                    <div className="mt-3 border-t border-white/10 pt-3">
-                      <div className="flex flex-wrap gap-2">
-                        {STATUS_BUTTONS.map((status) => (
-                          <button
-                            key={status.key}
-                            type="button"
-                            onClick={() => saveStatus(item, status.key)}
-                            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold transition ${
-                              getCurrentStatus(item) === status.key
-                                ? "bg-red-600 text-white shadow-lg shadow-red-700/25"
-                                : "bg-white/10 hover:bg-white/20 text-neutral-200"
-                            }`}
-                          >
-                            {status.label}
-                          </button>
-                        ))}
-                        <button
+                    <AnimatePresence initial={false}>
+                      {inLibrary && (
+                        <motion.button
+                          key={`trash-${item.mediaType}-${item.id}`}
                           type="button"
-                          onClick={() => saveStatus(item, "")}
-                          disabled={!getCurrentStatus(item)}
-                          className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold border transition ${
-                            getCurrentStatus(item)
-                              ? "bg-black/40 border-white/20 text-white/80 hover:bg-black/55"
-                              : "opacity-0 pointer-events-none"
+                          onClick={() => setRemoveTarget(item)}
+                          title="Remove from database"
+                          initial={{ opacity: 0, x: 14, scale: 0.92 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: 14, scale: 0.92 }}
+                          transition={{ duration: 0.22, ease: "easeOut" }}
+                          className={`absolute top-2.5 z-10 h-8 w-8 rounded-full border border-white/30 bg-black/65 text-white/85 hover:bg-red-700/90 ${
+                            isManageable(item) ? "right-12" : "right-2.5"
                           }`}
                         >
-                          Clear
-                        </button>
-                      </div>
-                      <PersonalRating
-                        className="mt-2"
-                        starSizeClass="text-2xl"
-                        value={getCurrentRating(item)}
-                        onRate={(value) => saveRating(item, value)}
-                        disabled={!user?.email || isUnreleased(item)}
-                        disabledLabel={
-                          !user?.email
-                            ? "Sign in to rate."
-                            : "Rating opens after release."
+                          <FaTrash size={12} className="mx-auto" />
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
+                    {isManageable(item) && (
+                      <button
+                        type="button"
+                        onClick={() => toggleFavourite(item)}
+                        title={
+                          isUnreleased(item)
+                            ? "Favourites unlock on release"
+                            : getCurrentFavourite(item)
+                              ? "Remove favourite"
+                              : "Add favourite"
                         }
-                        disabledToastMessage={
-                          !user?.email
-                            ? "Login required"
-                            : "Rating unlocks on release"
+                        className={`absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full border flex items-center justify-center transition ${
+                          isUnreleased(item)
+                            ? "bg-black/60 border-white/25 text-white/40"
+                            : getCurrentFavourite(item)
+                              ? "bg-red-600/90 border-red-300/60 text-white"
+                              : "bg-black/65 border-white/30 text-white/85 hover:bg-black/85"
+                        }`}
+                      >
+                        {getCurrentFavourite(item) ? (
+                          <FaHeart size={12} />
+                        ) : (
+                          <FaRegHeart size={12} />
+                        )}
+                      </button>
+                    )}
+                    <Link
+                      to={href}
+                      className="group flex gap-3 hover:bg-white/[0.02] rounded-lg transition"
+                    >
+                      <img
+                        src={
+                          imagePath
+                            ? `https://image.tmdb.org/t/p/w154${imagePath}`
+                            : NotFoundPlaceholder
                         }
-                        showNotInterestedToggle={getCurrentStatus(item) === "Dropped"}
-                        notInterested={getCurrentNotInterested(item)}
-                        onToggleNotInterested={() => toggleNotInterested(item)}
-                        notInterestedDisabled={!user?.email}
+                        alt=""
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = NotFoundPlaceholder;
+                        }}
+                        className="w-16 h-24 rounded object-cover bg-white/10 shrink-0"
                       />
-                    </div>
-                  ) : (
-                    <p className="mt-3 border-t border-white/10 pt-3 text-[11px] text-white/45">
-                      Open profile to view person details.
-                    </p>
-                  )}
-                </article>
-              );
+
+                      <div className="min-w-0">
+                        <motion.p
+                          className="truncate text-sm font-semibold text-white group-hover:text-red-300"
+                          style={{
+                            overflow: "hidden",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                          }}
+                          animate={{ maxWidth: inLibrary ? 195 : 230 }}
+                          transition={{ duration: 0.22, ease: "easeOut" }}
+                        >
+                          {item.title || item.name}
+                        </motion.p>
+                        <p className="mt-1 text-xs text-white/50 uppercase tracking-wide">
+                          {mediaLabel}
+                        </p>
+                        {subtitle && (
+                          <p className="mt-1 text-xs text-white/65 truncate">
+                            {subtitle}
+                          </p>
+                        )}
+                        <p className="mt-2 text-xs text-white/60 line-clamp-3">
+                          {description}
+                        </p>
+                      </div>
+                    </Link>
+
+                    {isManageable(item) ? (
+                      <div className="mt-3 border-t border-white/10">
+                        <div className="flex justify-center items-center gap-2 my-3">
+                          {STATUS_BUTTONS.map((status) => (
+                            <button
+                              key={status.key}
+                              type="button"
+                              onClick={() => saveStatus(item, status.key)}
+                              className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold transition ${
+                                getCurrentStatus(item) === status.key
+                                  ? "bg-red-600 text-white shadow-lg shadow-red-700/25"
+                                  : "bg-white/10 hover:bg-white/20 text-neutral-200"
+                              }`}
+                            >
+                              {status.label}
+                            </button>
+                          ))}
+                        </div>
+                        <PersonalRating
+                          className="mt-2"
+                          starSizeClass="text-2xl"
+                          value={getCurrentRating(item)}
+                          onRate={(value) => saveRating(item, value)}
+                          disabled={!user?.email || isUnreleased(item)}
+                          disabledLabel={
+                            !user?.email
+                              ? "Sign in to rate."
+                              : "Rating opens after release."
+                          }
+                          disabledToastMessage={
+                            !user?.email
+                              ? "Login required"
+                              : "Rating unlocks on release"
+                          }
+                          showNotInterestedToggle={
+                            getCurrentStatus(item) === "Dropped"
+                          }
+                          notInterested={getCurrentNotInterested(item)}
+                          onToggleNotInterested={() =>
+                            toggleNotInterested(item)
+                          }
+                          notInterestedDisabled={!user?.email}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-3 border-t border-white/10 pt-3 text-[11px] text-white/45">
+                        Open profile to view person details.
+                      </p>
+                    )}
+                  </article>
+                );
               })}
             </div>
           </>
         )}
       </div>
+      <RemoveConfirmModal
+        open={Boolean(removeTarget)}
+        item={removeTarget}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => removeFromDatabase(removeTarget)}
+      />
     </div>
   );
 };
