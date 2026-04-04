@@ -9,9 +9,12 @@ import {
 } from "react-icons/md";
 import {
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
   where,
 } from "firebase/firestore";
 import { AnimatePresence, motion } from "framer-motion";
@@ -37,9 +40,27 @@ const toDateKey = (date) => {
   return `${y}-${m}-${d}`;
 };
 
+const parseReleaseDate = (releaseDate) => {
+  if (!releaseDate) return null;
+  const date = new Date(`${releaseDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const formatReleaseDateLabel = (releaseDate) => {
+  const date = parseReleaseDate(releaseDate);
+  if (!date) return releaseDate || "Date TBA";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
 const getCountdownLabel = (releaseDate) => {
   const now = new Date();
-  const release = new Date(`${releaseDate}T00:00:00`);
+  const release = parseReleaseDate(releaseDate);
+  if (!release) return "Released";
   const diffMs = release.getTime() - now.getTime();
   if (diffMs <= 0) return "Released";
 
@@ -50,12 +71,43 @@ const getCountdownLabel = (releaseDate) => {
 };
 
 const isReleasedDate = (releaseDate) => {
-  const release = new Date(`${releaseDate}T00:00:00`);
-  if (Number.isNaN(release.getTime())) return false;
+  const release = parseReleaseDate(releaseDate);
+  if (!release) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return release.getTime() <= today.getTime();
 };
+
+const getEffectiveShowReleaseDate = (item) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const nextEpisodeDate = parseReleaseDate(item.next_episode_to_air?.air_date);
+  const lastEpisodeDate = parseReleaseDate(item.last_episode_to_air?.air_date);
+  const seasonDate = Array.isArray(item.seasons)
+    ? item.seasons
+        .map((season) => parseReleaseDate(season?.air_date))
+        .find(Boolean)
+    : null;
+  const originalDate = parseReleaseDate(item.releaseDate);
+
+  if (nextEpisodeDate && nextEpisodeDate.getTime() >= today.getTime()) {
+    return toDateKey(nextEpisodeDate);
+  }
+
+  if (lastEpisodeDate) return toDateKey(lastEpisodeDate);
+  if (nextEpisodeDate) return toDateKey(nextEpisodeDate);
+  if (seasonDate) return toDateKey(seasonDate);
+  return originalDate ? toDateKey(originalDate) : item.releaseDate || null;
+};
+
+const normalizeReleaseItem = (item) => ({
+  ...item,
+  releaseDate:
+    item.mediaType === "tv"
+      ? getEffectiveShowReleaseDate(item)
+      : item.releaseDate || null,
+});
 
 const compareReleaseStatus = (a, b) => {
   const aReleased = isReleasedDate(a.releaseDate);
@@ -66,9 +118,63 @@ const compareReleaseStatus = (a, b) => {
   }
 
   return (
-    new Date(`${a.releaseDate}T00:00:00`).getTime() -
-    new Date(`${b.releaseDate}T00:00:00`).getTime()
+    parseReleaseDate(a.releaseDate)?.getTime() -
+    parseReleaseDate(b.releaseDate)?.getTime()
   );
+};
+
+const getShowReleaseMeta = (item) => {
+  if (item.mediaType !== "tv") return null;
+
+  const candidateEpisodes = [
+    item.next_episode_to_air,
+    item.last_episode_to_air,
+    item.episode_to_air,
+  ].filter(Boolean);
+  const matchedEpisode = candidateEpisodes.find(
+    (episode) => episode?.air_date === item.releaseDate,
+  );
+
+  if (matchedEpisode) {
+    const season = Number(matchedEpisode.season_number);
+    const episode = Number(matchedEpisode.episode_number);
+    if (season > 0 && episode > 0) return `S${season} E${episode}`;
+  }
+
+  const matchedSeason = Array.isArray(item.seasons)
+    ? item.seasons.find(
+        (season) =>
+          Number(season?.season_number) > 0 &&
+          season?.air_date === item.releaseDate,
+      )
+    : null;
+
+  if (matchedSeason) {
+    const season = Number(matchedSeason.season_number);
+    const episodeCount = Number(matchedSeason.episode_count);
+    if (season > 0 && episodeCount > 0) return `S${season} E1-${episodeCount}`;
+    if (season > 0) return `S${season}`;
+  }
+
+  const season =
+    Number(item.seasonNumber) ||
+    Number(item.season_number) ||
+    Number(item.next_episode_to_air?.season_number) ||
+    Number(item.last_episode_to_air?.season_number);
+  const episode =
+    Number(item.episodeNumber) ||
+    Number(item.episode_number) ||
+    Number(item.next_episode_to_air?.episode_number) ||
+    Number(item.last_episode_to_air?.episode_number);
+
+  if (season > 0 && episode > 0) return `S${season} E${episode}`;
+  if (season > 0) return `S${season}`;
+  return null;
+};
+
+const getReleaseMetaLabel = (item) => {
+  if (item.mediaType !== "tv") return "Movie";
+  return getShowReleaseMeta(item) || "Series";
 };
 
 const PosterThumb = ({ posterPath, className = "w-10 h-14" }) => {
@@ -105,14 +211,70 @@ const PosterThumb = ({ posterPath, className = "w-10 h-14" }) => {
   );
 };
 
+const DayPosterGrid = ({ releases }) => {
+  const count = releases.length;
+  if (!count) return null;
+
+  if (count === 1) {
+    return (
+      <PosterThumb
+        posterPath={releases[0].poster}
+        className="h-full w-full rounded-lg"
+      />
+    );
+  }
+
+  if (count === 2) {
+    return (
+      <div className="grid h-full w-full grid-cols-2 gap-px rounded-lg bg-black/50">
+        {releases.map((item) => (
+          <PosterThumb
+            key={`${item.mediaType}-${item.id}`}
+            posterPath={item.poster}
+            className="h-full w-full rounded-none"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const previewItems = releases.slice(0, 4);
+  const overflow = count - previewItems.length;
+
+  return (
+    <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-px rounded-lg bg-black/50">
+      {previewItems.map((item, index) => (
+        <div
+          key={`${item.mediaType}-${item.id}-${index}`}
+          className="relative h-full w-full overflow-hidden"
+        >
+          <PosterThumb
+            posterPath={item.poster}
+            className="h-full w-full rounded-none"
+          />
+          {overflow > 0 && index === previewItems.length - 1 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/65 text-[10px] font-semibold text-white">
+              +{overflow}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const ReleaseCalendar = () => {
   const { user } = UserAuth();
   const { selectedProfile, profileLoading } = useProfile();
   const navigate = useNavigate();
   const [monthDate, setMonthDate] = useState(startOfMonth(new Date()));
   const [upcoming, setUpcoming] = useState([]);
+  const [savedShows, setSavedShows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingShows, setRefreshingShows] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
+  const [modalDate, setModalDate] = useState(null);
   const [monthDirection, setMonthDirection] = useState(0);
   const [countdownScope, setCountdownScope] = useState("current");
   const [visibleCount, setVisibleCount] = useState(SIDEBAR_PAGE_SIZE);
@@ -144,11 +306,7 @@ const ReleaseCalendar = () => {
       where("releaseDate", ">=", currentYearStart),
       orderBy("releaseDate", "asc"),
     );
-    const showsQuery = query(
-      showsRef,
-      where("releaseDate", ">=", currentYearStart),
-      orderBy("releaseDate", "asc"),
-    );
+    const showsQuery = query(showsRef, orderBy("releaseDate", "asc"));
 
     let movies = [];
     let shows = [];
@@ -159,20 +317,20 @@ const ReleaseCalendar = () => {
       if (!moviesLoaded || !showsLoaded) return;
 
       const merged = [...movies, ...shows]
-        .filter((i) => i.releaseDate)
-        .filter((i) => {
-          const dt = new Date(`${i.releaseDate}T00:00:00`);
-          return !Number.isNaN(dt.getTime());
+        .map(normalizeReleaseItem)
+        .filter((item) => item.releaseDate)
+        .filter((item) => {
+          const dt = parseReleaseDate(item.releaseDate);
+          return Boolean(dt) && dt.getFullYear() >= fetchedFromYear;
         })
-        .sort(
-          (a, b) =>
-            new Date(`${a.releaseDate}T00:00:00`).getTime() -
-            new Date(`${b.releaseDate}T00:00:00`).getTime(),
-        );
+        .sort(compareReleaseStatus);
 
       const unique = Array.from(
         new Map(
-          merged.map((i) => [`${i.mediaType || "movie"}:${i.id}`, i]),
+          merged.map((item) => [
+            `${item.mediaType || "movie"}:${item.id}:${item.releaseDate}`,
+            item,
+          ]),
         ).values(),
       );
 
@@ -206,11 +364,13 @@ const ReleaseCalendar = () => {
           id: d.data().id ?? Number(d.id),
           mediaType: "tv",
         }));
+        setSavedShows(shows);
         showsLoaded = true;
         sync();
       },
       () => {
         shows = [];
+        setSavedShows([]);
         showsLoaded = true;
         sync();
       },
@@ -248,12 +408,13 @@ const ReleaseCalendar = () => {
   const selectedReleases = selectedDate
     ? releasesByDate.get(selectedDate) || []
     : [];
+  const modalReleases = modalDate ? releasesByDate.get(modalDate) || [] : [];
   const monthReleases = useMemo(() => {
     const y = monthDate.getFullYear();
     const m = monthDate.getMonth();
     return upcoming.filter((item) => {
-      const dt = new Date(`${item.releaseDate}T00:00:00`);
-      return dt.getFullYear() === y && dt.getMonth() === m;
+      const dt = parseReleaseDate(item.releaseDate);
+      return dt && dt.getFullYear() === y && dt.getMonth() === m;
     });
   }, [upcoming, monthDate]);
 
@@ -274,8 +435,8 @@ const ReleaseCalendar = () => {
     if (countdownScope === "all") {
       return upcoming
         .filter((item) => {
-          const dt = new Date(`${item.releaseDate}T00:00:00`);
-          return dt.getFullYear() >= fetchedFromYear;
+          const dt = parseReleaseDate(item.releaseDate);
+          return dt && dt.getFullYear() >= fetchedFromYear;
         })
         .sort(compareReleaseStatus);
     }
@@ -284,8 +445,8 @@ const ReleaseCalendar = () => {
     const m = monthDate.getMonth();
     return upcoming
       .filter((item) => {
-        const dt = new Date(`${item.releaseDate}T00:00:00`);
-        return dt.getFullYear() === y && dt.getMonth() === m;
+        const dt = parseReleaseDate(item.releaseDate);
+        return dt && dt.getFullYear() === y && dt.getMonth() === m;
       })
       .sort(compareReleaseStatus);
   }, [upcoming, countdownScope, monthDate, fetchedFromYear]);
@@ -314,9 +475,101 @@ const ReleaseCalendar = () => {
     setVisibleCount(SIDEBAR_PAGE_SIZE);
   }, [countdownScope, monthDate, countdownItems.length]);
 
+  const missingShowMetadataCount = useMemo(
+    () =>
+      savedShows.filter(
+        (item) =>
+          !item.next_episode_to_air &&
+          !item.last_episode_to_air &&
+          !(Array.isArray(item.seasons) && item.seasons.length > 0),
+      ).length,
+    [savedShows],
+  );
+
+  const refreshShowMetadata = async (mode = "missing") => {
+    if (
+      !user?.email ||
+      !process.env.REACT_APP_TMDB_API_KEY ||
+      refreshingShows
+    ) {
+      return;
+    }
+
+    const targetShows = savedShows.filter((item) => {
+      if (mode === "all") return true;
+      return (
+        !item.next_episode_to_air &&
+        !item.last_episode_to_air &&
+        !(Array.isArray(item.seasons) && item.seasons.length > 0)
+      );
+    });
+
+    if (!targetShows.length) {
+      setRefreshMessage(
+        mode === "all"
+          ? "Already up to date."
+          : "Nothing to refresh.",
+      );
+      return;
+    }
+
+    setRefreshingShows(true);
+    setRefreshMessage("");
+
+    let updatedCount = 0;
+
+    try {
+      for (const item of targetShows) {
+        const response = await fetch(
+          `https://api.themoviedb.org/3/tv/${item.id}?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
+        );
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const showRef = doc(
+          db,
+          ...profileSavedCollectionPath(user.email, activeProfileId, "shows"),
+          String(item.id),
+        );
+
+        await setDoc(
+          showRef,
+          {
+            title: data.name || item.title || "",
+            poster: data.poster_path ?? item.poster ?? null,
+            backdrop: data.backdrop_path ?? item.backdrop ?? null,
+            overview: data.overview ?? item.overview ?? null,
+            releaseDate: data.first_air_date ?? item.releaseDate ?? null,
+            rating: data.vote_average ?? item.rating ?? null,
+            totalSeasons:
+              Number.isFinite(Number(data.number_of_seasons)) &&
+              Number(data.number_of_seasons) > 0
+                ? Number(data.number_of_seasons)
+                : item.totalSeasons || null,
+            next_episode_to_air: data.next_episode_to_air ?? null,
+            last_episode_to_air: data.last_episode_to_air ?? null,
+            seasons: Array.isArray(data.seasons) ? data.seasons : [],
+            metadataUpdatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        updatedCount += 1;
+      }
+
+      setRefreshMessage(
+        updatedCount > 0
+          ? `${updatedCount} updated`
+          : "No updates",
+      );
+    } finally {
+      setRefreshingShows(false);
+    }
+  };
+
   const jumpToReleaseDate = (releaseDate) => {
-    const dt = new Date(`${releaseDate}T00:00:00`);
-    if (Number.isNaN(dt.getTime())) return;
+    const dt = parseReleaseDate(releaseDate);
+    if (!dt) return;
     setMonthDate(new Date(dt.getFullYear(), dt.getMonth(), 1));
     setSelectedDate(releaseDate);
     setMonthDirection(0);
@@ -339,6 +592,8 @@ const ReleaseCalendar = () => {
 
   const renderStatusCard = (item) => {
     const released = isReleasedDate(item.releaseDate);
+    const releaseMetaLabel = getReleaseMetaLabel(item);
+
     return (
       <div
         key={`${item.mediaType}-${item.id}`}
@@ -360,10 +615,11 @@ const ReleaseCalendar = () => {
             >
               {item.title || item.name}
             </button>
-            <p className="mt-1 text-[11px] uppercase tracking-wide text-white/45">
-              {item.mediaType === "tv" ? "Series" : "Movie"} •{" "}
-              {item.releaseDate}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-wide text-white/45">
+              <span>{releaseMetaLabel}</span>
+              <span className="text-white/25">•</span>
+              <span>{formatReleaseDateLabel(item.releaseDate)}</span>
+            </div>
 
             <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               {released ? (
@@ -394,53 +650,73 @@ const ReleaseCalendar = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#0a0a0a] text-white pt-32 pb-6 px-4 md:px-8">
+    <div className="min-h-screen overflow-x-hidden bg-[#0a0a0a] text-white pt-28 pb-4 px-4 md:px-8">
       <div className="max-w-7xl mx-auto flex flex-col">
-        {/* <div className="mb-6">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight">
-            Release Calendar
-          </h1>
-          <p className="text-white/60 text-sm mt-1">
-            Your saved release schedule with date markers and status.
-          </p>
-        </div> */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <section className="lg:col-span-8 rounded-2xl border border-white/10 bg-black/40 p-4 md:p-5 overflow-hidden">
+            <div className="mb-2.5 space-y-2">
+              <div className="grid grid-cols-[36px_1fr_36px] items-center gap-2">
+                <button
+                  onClick={() => {
+                    setMonthDirection(-1);
+                    setMonthDate(
+                      new Date(
+                        monthDate.getFullYear(),
+                        monthDate.getMonth() - 1,
+                        1,
+                      ),
+                    );
+                  }}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                >
+                  <MdChevronLeft size={20} />
+                </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <section className="lg:col-span-8 rounded-2xl border border-white/10 bg-black/40 p-4 md:p-6 overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => {
-                  setMonthDirection(-1);
-                  setMonthDate(
-                    new Date(
-                      monthDate.getFullYear(),
-                      monthDate.getMonth() - 1,
-                      1,
-                    ),
-                  );
-                }}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
-              >
-                <MdChevronLeft size={20} />
-              </button>
+                <h2 className="text-center text-lg md:text-xl font-semibold">
+                  {monthLabel}
+                </h2>
 
-              <h2 className="text-lg md:text-xl font-semibold">{monthLabel}</h2>
+                <button
+                  onClick={() => {
+                    setMonthDirection(1);
+                    setMonthDate(
+                      new Date(
+                        monthDate.getFullYear(),
+                        monthDate.getMonth() + 1,
+                        1,
+                      ),
+                    );
+                  }}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                >
+                  <MdChevronRight size={20} />
+                </button>
+              </div>
 
-              <button
-                onClick={() => {
-                  setMonthDirection(1);
-                  setMonthDate(
-                    new Date(
-                      monthDate.getFullYear(),
-                      monthDate.getMonth() + 1,
-                      1,
-                    ),
-                  );
-                }}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
-              >
-                <MdChevronRight size={20} />
-              </button>
+              <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0 text-[11px] uppercase tracking-wide text-white/50">
+                  TV gaps {missingShowMetadataCount}
+                  {refreshMessage ? `  /  ${refreshMessage}` : ""}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => refreshShowMetadata("missing")}
+                    disabled={refreshingShows || missingShowMetadataCount === 0}
+                    className="h-7 rounded-lg border border-white/15 bg-white/[0.04] px-2.5 text-[10px] uppercase tracking-wide text-white/80 hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Refresh Missing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => refreshShowMetadata("all")}
+                    disabled={refreshingShows || savedShows.length === 0}
+                    className="h-7 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 text-[10px] uppercase tracking-wide text-red-100 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Refresh All Shows
+                  </button>
+                </div>
+              </div>
             </div>
 
             <AnimatePresence mode="wait" custom={monthDirection}>
@@ -453,8 +729,8 @@ const ReleaseCalendar = () => {
                 exit="exit"
                 transition={{ duration: 0.24, ease: "easeOut" }}
               >
-                <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
                     <p className="text-[10px] uppercase tracking-wider text-white/45">
                       This Month
                     </p>
@@ -463,7 +739,7 @@ const ReleaseCalendar = () => {
                     </p>
                     <p className="text-[11px] text-white/55">Upcoming titles</p>
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
                     <p className="text-[10px] uppercase tracking-wider text-white/45">
                       Release Days
                     </p>
@@ -474,7 +750,7 @@ const ReleaseCalendar = () => {
                       Dates with drops
                     </p>
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
                     <p className="text-[10px] uppercase tracking-wider text-white/45">
                       Selected Day
                     </p>
@@ -525,15 +801,21 @@ const ReleaseCalendar = () => {
                         }
 
                         const key = toDateKey(day);
-                        const hasRelease = releasesByDate.has(key);
+                        const dayReleases = releasesByDate.get(key) || [];
+                        const hasRelease = dayReleases.length > 0;
                         const isSelected = selectedDate === key;
-                        const count = releasesByDate.get(key)?.length || 0;
+                        const count = dayReleases.length;
+                        const canOpenModal = count > 2;
 
                         return (
                           <button
                             key={key}
-                            onClick={() => setSelectedDate(key)}
-                            className={`h-20 rounded-lg border text-left p-2 transition ${
+                            type="button"
+                            onClick={() => {
+                              setSelectedDate(key);
+                              if (canOpenModal) setModalDate(key);
+                            }}
+                            className={`relative h-20 overflow-hidden rounded-lg border text-left transition ${
                               isSelected
                                 ? "border-red-500 bg-red-500/15"
                                 : hasRelease
@@ -541,17 +823,20 @@ const ReleaseCalendar = () => {
                                   : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05]"
                             }`}
                           >
-                            <div className="text-sm font-medium">
-                              {day.getDate()}
-                            </div>
                             {hasRelease && (
-                              <div className="mt-2 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.8)]" />
-                                <span className="text-[10px] text-white/70">
-                                  {count} release{count > 1 ? "s" : ""}
-                                </span>
+                              <div className="absolute inset-0">
+                                <DayPosterGrid releases={dayReleases} />
+                                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/15 to-black/75" />
                               </div>
                             )}
+
+                            <div className="relative flex h-full flex-col justify-between p-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="text-sm font-medium">
+                                  {day.getDate()}
+                                </div>
+                              </div>
+                            </div>
                           </button>
                         );
                       })}
@@ -685,6 +970,113 @@ const ReleaseCalendar = () => {
           </aside>
         </div>
       </div>
+
+      <AnimatePresence>
+        {refreshingShows && (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#101116] p-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.45)]"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 12 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <div className="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-2 border-white/15 border-t-red-500" />
+              <h3 className="text-xl font-semibold text-white">
+                Refreshing Shows
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-white/65">
+                Pulling episode and season metadata for your saved shows. This
+                might take a while.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {modalDate && modalReleases.length > 2 && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setModalDate(null)}
+          >
+            <motion.div
+              className="w-full max-w-3xl rounded-3xl border border-white/10 bg-[#0f1015] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)]"
+              initial={{ y: 18, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 18, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                    Releases
+                  </p>
+                  <h3 className="mt-1 text-xl font-semibold">{modalDate}</h3>
+                  <p className="mt-1 text-sm text-white/55">
+                    {modalReleases.length} titles releasing that day
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setModalDate(null)}
+                  className="h-9 rounded-full border border-white/15 px-3 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+                {modalReleases.map((item) => {
+                  const releaseMetaLabel = getReleaseMetaLabel(item);
+
+                  return (
+                    <button
+                      key={`${item.mediaType}-${item.id}`}
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          item.mediaType === "tv"
+                            ? `/shows/${item.id}`
+                            : `/movies/${item.id}`,
+                        )
+                      }
+                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left hover:bg-white/[0.06]"
+                    >
+                      <PosterThumb
+                        posterPath={item.poster}
+                        className="h-20 w-14"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-white">
+                          {item.title || item.name}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-wide text-white/45">
+                          <span>{releaseMetaLabel}</span>
+                          <span className="text-white/25">•</span>
+                          <span>
+                            {formatReleaseDateLabel(item.releaseDate)}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

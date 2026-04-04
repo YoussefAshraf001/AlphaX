@@ -340,6 +340,9 @@ export const SavedContentProvider = ({ children }) => {
               {
                 status: "Watching",
                 totalEpisodes: releasedEpisodeTotal,
+                next_episode_to_air: data.next_episode_to_air ?? null,
+                last_episode_to_air: data.last_episode_to_air ?? null,
+                seasons: Array.isArray(data.seasons) ? data.seasons : [],
                 newEpisodeStatusCheckedAt: serverTimestamp(),
                 metadataUpdatedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -354,6 +357,9 @@ export const SavedContentProvider = ({ children }) => {
               showRef,
               {
                 totalEpisodes: releasedEpisodeTotal,
+                next_episode_to_air: data.next_episode_to_air ?? null,
+                last_episode_to_air: data.last_episode_to_air ?? null,
+                seasons: Array.isArray(data.seasons) ? data.seasons : [],
                 newEpisodeStatusCheckedAt: serverTimestamp(),
                 metadataUpdatedAt: serverTimestamp(),
               },
@@ -365,6 +371,9 @@ export const SavedContentProvider = ({ children }) => {
           await setDoc(
             showRef,
             {
+              next_episode_to_air: data.next_episode_to_air ?? null,
+              last_episode_to_air: data.last_episode_to_air ?? null,
+              seasons: Array.isArray(data.seasons) ? data.seasons : [],
               newEpisodeStatusCheckedAt: serverTimestamp(),
             },
             { merge: true },

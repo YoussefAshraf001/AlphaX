@@ -2255,6 +2255,11 @@ const Account = () => {
                 Number(data.number_of_seasons) > 0
                   ? Number(data.number_of_seasons)
                   : item.totalSeasons || null,
+              next_episode_to_air:
+                data.next_episode_to_air ?? item.next_episode_to_air ?? null,
+              last_episode_to_air:
+                data.last_episode_to_air ?? item.last_episode_to_air ?? null,
+              seasons: Array.isArray(data.seasons) ? data.seasons : item.seasons || [],
               status: shouldMoveToWantToWatch ? "Watching" : item.status,
             }
           : {

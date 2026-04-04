@@ -449,6 +449,9 @@ const ShowDetails = () => {
             Number(show.number_of_seasons) > 0
               ? Number(show.number_of_seasons)
               : null,
+          next_episode_to_air: show.next_episode_to_air ?? null,
+          last_episode_to_air: show.last_episode_to_air ?? null,
+          seasons: Array.isArray(show.seasons) ? show.seasons : [],
           watchedEpisodes:
             newStatus === "Finished" ? totalEpisodesNumber : watchedEpisodes,
           currentSeason:
@@ -538,6 +541,9 @@ const ShowDetails = () => {
             Number(show.number_of_seasons) > 0
               ? Number(show.number_of_seasons)
               : null,
+          next_episode_to_air: show.next_episode_to_air ?? null,
+          last_episode_to_air: show.last_episode_to_air ?? null,
+          seasons: Array.isArray(show.seasons) ? show.seasons : [],
           watchedEpisodes,
           currentSeason:
             watchedEpisodes > 0
@@ -644,6 +650,9 @@ const ShowDetails = () => {
             Number(show.number_of_seasons) > 0
               ? Number(show.number_of_seasons)
               : null,
+          next_episode_to_air: show.next_episode_to_air ?? null,
+          last_episode_to_air: show.last_episode_to_air ?? null,
+          seasons: Array.isArray(show.seasons) ? show.seasons : [],
           watchedEpisodes,
           notes: normalizedNotes,
           updatedAt: serverTimestamp(),
@@ -1118,6 +1127,9 @@ const ShowDetails = () => {
             Number(show.number_of_seasons) > 0
               ? Number(show.number_of_seasons)
               : null,
+          next_episode_to_air: show.next_episode_to_air ?? null,
+          last_episode_to_air: show.last_episode_to_air ?? null,
+          seasons: Array.isArray(show.seasons) ? show.seasons : [],
           watchedEpisodes: clamped,
           currentSeason:
             clamped > 0 ? getSeasonEpisodeMeta(clamped)?.season || null : null,
