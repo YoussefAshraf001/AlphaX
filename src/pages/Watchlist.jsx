@@ -386,7 +386,7 @@ const SidePanel = ({
                       key={actor.id}
                       className="group flex items-center gap-3 w-full hover:bg-zinc-700/60 px-2 py-1 rounded-lg transition"
                     >
-                      <button
+                      <a
                         onClick={(e) => onOpenPath(e, `/person/${actor.id}`)}
                         onAuxClick={(e) => {
                           if (e.button === 1) {
@@ -407,7 +407,7 @@ const SidePanel = ({
                         <span className="text-sm text-white/80 truncate">
                           {actor.name}
                         </span>
-                      </button>
+                      </a>
                     </div>
                   ))
                 ) : (
@@ -447,7 +447,7 @@ const SidePanel = ({
               >
                 {movies.length ? (
                   movies.map((item) => (
-                    <button
+                    <a
                       key={`movie-${item.id}`}
                       onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
                       onAuxClick={(e) => {
@@ -472,7 +472,7 @@ const SidePanel = ({
                           {item.title}
                         </p>
                       </div>
-                    </button>
+                    </a>
                   ))
                 ) : (
                   <p className="text-xs text-white/40 px-2">
@@ -511,7 +511,7 @@ const SidePanel = ({
               >
                 {shows.length ? (
                   shows.map((item) => (
-                    <button
+                    <a
                       key={`tv-${item.id}`}
                       onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
                       onAuxClick={(e) => {
@@ -536,7 +536,7 @@ const SidePanel = ({
                           {item.title}
                         </p>
                       </div>
-                    </button>
+                    </a>
                   ))
                 ) : (
                   <p className="text-xs text-white/40 px-2">
@@ -2259,7 +2259,9 @@ const Account = () => {
                 data.next_episode_to_air ?? item.next_episode_to_air ?? null,
               last_episode_to_air:
                 data.last_episode_to_air ?? item.last_episode_to_air ?? null,
-              seasons: Array.isArray(data.seasons) ? data.seasons : item.seasons || [],
+              seasons: Array.isArray(data.seasons)
+                ? data.seasons
+                : item.seasons || [],
               status: shouldMoveToWantToWatch ? "Watching" : item.status,
             }
           : {

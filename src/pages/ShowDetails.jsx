@@ -81,6 +81,8 @@ const ShowDetails = () => {
   const [actorRatingsMap, setActorRatingsMap] = useState({});
   const [actorActionTarget, setActorActionTarget] = useState(null);
   const autoStatusSyncRef = useRef(false);
+  const holdTimeoutRef = useRef(null);
+  const isHoldingRef = useRef(false);
 
   const CastArrow = ({ onClick, direction }) => (
     <button
@@ -1075,7 +1077,8 @@ const ShowDetails = () => {
       return;
     }
 
-    await updateEpisodeProgress(targetSeason.seasonEndEpisode);
+    const clamped = updateEpisodeProgressLocal(targetSeason.seasonEndEpisode);
+    await saveEpisodeProgress(clamped);
   };
 
   const currentEpisodeMeta = getSeasonEpisodeMeta(safeWatchedEpisodes);
@@ -1084,18 +1087,18 @@ const ShowDetails = () => {
       ? getSeasonEpisodeMeta(safeWatchedEpisodes + 1)
       : null;
 
-  const updateEpisodeProgress = async (nextWatchedEpisodes) => {
-    if (!user?.email || !show) {
-      toast.error("Login required");
-      return;
-    }
-
+  const updateEpisodeProgressLocal = (nextWatchedEpisodes) => {
     const clamped = Math.max(
       0,
       Math.min(nextWatchedEpisodes, totalEpisodesNumber || nextWatchedEpisodes),
     );
 
     setWatchedEpisodes(clamped);
+    return clamped; // important
+  };
+
+  const saveEpisodeProgress = async (clamped) => {
+    if (!user?.email || !show) return;
 
     const nextStatus =
       totalEpisodesNumber > 0 && clamped >= totalEpisodesNumber
@@ -1145,6 +1148,35 @@ const ShowDetails = () => {
     } catch {
       toast.error("Failed to update episode progress");
     }
+  };
+
+  const startHold = (direction = 1) => {
+    isHoldingRef.current = true;
+
+    let delay = 300;
+    let speedUp = 0.85;
+
+    let current = safeWatchedEpisodes;
+
+    const step = () => {
+      current += direction;
+
+      updateEpisodeProgressLocal(current);
+
+      delay = Math.max(60, delay * speedUp);
+      holdTimeoutRef.current = setTimeout(step, delay);
+    };
+
+    step();
+  };
+
+  const stopHold = () => {
+    clearTimeout(holdTimeoutRef.current);
+    saveEpisodeProgress(watchedEpisodes);
+
+    setTimeout(() => {
+      isHoldingRef.current = false;
+    }, 0);
   };
 
   return (
@@ -1425,7 +1457,10 @@ const ShowDetails = () => {
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => updateEpisodeProgress(0)}
+                        onClick={() => {
+                          const clamped = updateEpisodeProgressLocal(0);
+                          saveEpisodeProgress(clamped);
+                        }}
                         disabled={safeWatchedEpisodes <= 0}
                         title="Reset progress"
                         className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
@@ -1433,23 +1468,37 @@ const ShowDetails = () => {
                         <MdRestartAlt size={16} />
                       </button>
                       <button
-                        onClick={() =>
-                          updateEpisodeProgress(safeWatchedEpisodes - 1)
-                        }
+                        onClick={() => {
+                          if (isHoldingRef.current) return;
+
+                          const next = safeWatchedEpisodes - 1;
+                          const clamped = updateEpisodeProgressLocal(next);
+                          saveEpisodeProgress(clamped);
+                        }}
+                        onMouseDown={() => startHold(-1)}
+                        onMouseUp={stopHold}
+                        onMouseLeave={stopHold}
+                        onTouchStart={() => startHold(-1)}
+                        onTouchEnd={stopHold}
                         disabled={safeWatchedEpisodes <= 0}
                         className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         -
                       </button>
                       <button
-                        onClick={() =>
-                          updateEpisodeProgress(safeWatchedEpisodes + 1)
-                        }
-                        disabled={
-                          totalEpisodesNumber > 0 &&
-                          safeWatchedEpisodes >= totalEpisodesNumber
-                        }
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                        onClick={() => {
+                          if (isHoldingRef.current) return;
+
+                          const next = safeWatchedEpisodes + 1;
+                          const clamped = updateEpisodeProgressLocal(next);
+                          saveEpisodeProgress(clamped);
+                        }}
+                        onMouseDown={() => startHold(1)}
+                        onMouseUp={stopHold}
+                        onMouseLeave={stopHold}
+                        onTouchStart={() => startHold(1)}
+                        onTouchEnd={stopHold}
                       >
                         +
                       </button>
@@ -1863,19 +1912,19 @@ const ShowDetails = () => {
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-5">
                   <div className="flex items-center gap-3 min-w-0">
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.25 }}
-                    className="w-11 h-14 rounded-md bg-cover bg-center bg-white/10 shrink-0 border border-white/10"
-                    style={{
-                      backgroundImage: `url(${
-                        actorActionTarget.profile_path
-                          ? `https://image.tmdb.org/t/p/w185/${actorActionTarget.profile_path}`
-                          : NotFoundPlaceholder
-                      })`,
-                    }}
-                  />
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25 }}
+                      className="w-11 h-14 rounded-md bg-cover bg-center bg-white/10 shrink-0 border border-white/10"
+                      style={{
+                        backgroundImage: `url(${
+                          actorActionTarget.profile_path
+                            ? `https://image.tmdb.org/t/p/w185/${actorActionTarget.profile_path}`
+                            : NotFoundPlaceholder
+                        })`,
+                      }}
+                    />
                     <div className="min-w-0">
                       <h3 className="text-base font-semibold truncate">
                         {actorActionTarget.name}
@@ -1884,46 +1933,46 @@ const ShowDetails = () => {
                         Actor Actions
                       </p>
                     </div>
+                  </div>
+                  <button
+                    onClick={() => setActorActionTarget(null)}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white flex items-center justify-center transition"
+                    aria-label="Close actor actions"
+                  >
+                    <IoMdClose size={17} />
+                  </button>
                 </div>
+
                 <button
-                  onClick={() => setActorActionTarget(null)}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white flex items-center justify-center transition"
-                  aria-label="Close actor actions"
+                  type="button"
+                  onClick={() => {
+                    const isLiked = likedActors.has(actorActionTarget.id);
+                    if (isLiked) {
+                      removeActor(actorActionTarget);
+                    } else {
+                      saveActor(actorActionTarget);
+                    }
+                  }}
+                  className={`mb-4 w-full rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                    likedActors.has(actorActionTarget.id)
+                      ? "border-red-400/60 bg-red-500/15 text-red-200 hover:bg-red-500/25"
+                      : "border-white/20 bg-white/5 text-white/85 hover:bg-white/10"
+                  }`}
                 >
-                  <IoMdClose size={17} />
+                  {likedActors.has(actorActionTarget.id)
+                    ? "Remove Favourite"
+                    : "Add to Favourites"}
                 </button>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const isLiked = likedActors.has(actorActionTarget.id);
-                  if (isLiked) {
-                    removeActor(actorActionTarget);
-                  } else {
-                    saveActor(actorActionTarget);
-                  }
-                }}
-                className={`mb-4 w-full rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
-                  likedActors.has(actorActionTarget.id)
-                    ? "border-red-400/60 bg-red-500/15 text-red-200 hover:bg-red-500/25"
-                    : "border-white/20 bg-white/5 text-white/85 hover:bg-white/10"
-                }`}
-              >
-                {likedActors.has(actorActionTarget.id)
-                  ? "Remove Favourite"
-                  : "Add to Favourites"}
-              </button>
-
-              <PersonalRating
-                ratingType="emoji"
-                value={Number(actorRatingsMap[actorActionTarget.id] || 0)}
-                onRate={(value) => saveActorRating(actorActionTarget, value)}
-                modeHint="Rate this actor"
-                disabled={!user?.email}
-                disabledLabel="Sign in to rate actors."
-                disabledToastMessage="Sign in to rate actors."
-              />
+                <PersonalRating
+                  ratingType="emoji"
+                  value={Number(actorRatingsMap[actorActionTarget.id] || 0)}
+                  onRate={(value) => saveActorRating(actorActionTarget, value)}
+                  modeHint="Rate this actor"
+                  disabled={!user?.email}
+                  disabledLabel="Sign in to rate actors."
+                  disabledToastMessage="Sign in to rate actors."
+                />
               </div>
             </motion.div>
           </motion.div>
@@ -1963,4 +2012,3 @@ const ShowDetails = () => {
 };
 
 export default ShowDetails;
-
