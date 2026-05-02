@@ -387,6 +387,7 @@ const SidePanel = ({
                       className="group flex items-center gap-3 w-full hover:bg-zinc-700/60 px-2 py-1 rounded-lg transition"
                     >
                       <a
+                        href={`/person/${actor.id}`}
                         onClick={(e) => onOpenPath(e, `/person/${actor.id}`)}
                         onAuxClick={(e) => {
                           if (e.button === 1) {
@@ -448,6 +449,7 @@ const SidePanel = ({
                 {movies.length ? (
                   movies.map((item) => (
                     <a
+                      href={`/movies/${item.id}`}
                       key={`movie-${item.id}`}
                       onClick={(e) => onOpenPath(e, `/movies/${item.id}`)}
                       onAuxClick={(e) => {
@@ -512,6 +514,7 @@ const SidePanel = ({
                 {shows.length ? (
                   shows.map((item) => (
                     <a
+                      href={`/shows/${item.id}`}
                       key={`tv-${item.id}`}
                       onClick={(e) => onOpenPath(e, `/shows/${item.id}`)}
                       onAuxClick={(e) => {
