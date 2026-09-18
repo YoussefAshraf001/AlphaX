@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WatchDetails from "../components/content/WatchDetails";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -754,6 +755,7 @@ const MovieDetails = () => {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="relative z-10 px-4 md:px-8 pt-24 pb-12"
       >
+        <WatchDetails key={`${id}:${user?.email || "guest"}:${activeProfileId}`} media={movie} type="movie" email={user?.email} profileId={activeProfileId}>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-5 md:p-8 shadow-2xl">
             <div className="mb-4">
@@ -770,7 +772,7 @@ const MovieDetails = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3 min-w-0 max-md:max-w-[180px] [&_img]:!h-auto [&_img]:max-h-[390px] [&_img]:!rounded-lg [&_img]:!shadow-none">
                 <div className="relative w-full max-w-[320px] mx-auto">
                   <motion.img
                     src={
@@ -814,7 +816,7 @@ const MovieDetails = () => {
                 </div>
               </div>
 
-              <div className="lg:col-span-8 flex flex-col gap-5">
+              <div className="lg:col-span-9 min-w-0 flex flex-col gap-5 [&>div:first-child>div:first-child]:flex-wrap [&>div:first-child>div:first-child]:gap-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">
@@ -1316,6 +1318,7 @@ const MovieDetails = () => {
             </div>
           </div>
         </div>
+        </WatchDetails>
       </motion.div>
 
       <ScreenshotsModal

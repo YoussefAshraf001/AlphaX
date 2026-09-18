@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { UserAuth } from "./AuthContext";
-import { isCloudinaryUrl } from "../utils/cloudinaryUpload";
+import { persistentAvatar, avatarUpdates } from "../utils/profileAvatar";
 
 const ProfileContext = createContext(null);
 
@@ -57,8 +57,10 @@ export const ProfileContextProvider = ({ children }) => {
 
     const unsub = onSnapshot(
       profilesRef,
+      { includeMetadataChanges: true },
       async (snap) => {
         if (snap.empty) {
+          if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
           const fallback = defaultProfileFromUser(user);
           await setDoc(
             doc(db, "users", user.email, "profiles", fallback.id),
@@ -87,7 +89,7 @@ export const ProfileContextProvider = ({ children }) => {
               name: data.name || data.displayName || "Profile",
               username: data.username || data.name || "profile",
               displayName: data.displayName || data.name || "Profile",
-              avatar: isCloudinaryUrl(data.avatar) ? data.avatar : null,
+              avatar: persistentAvatar(data.avatar) || persistentAvatar(data.avatarBase64),
               avatarMeta:
                 data.avatarMeta && typeof data.avatarMeta === "object"
                   ? data.avatarMeta
@@ -147,7 +149,7 @@ export const ProfileContextProvider = ({ children }) => {
     const avatarValue =
       typeof profileInput === "object" &&
       typeof profileInput?.avatar === "string" &&
-      isCloudinaryUrl(profileInput.avatar)
+      persistentAvatar(profileInput.avatar)
         ? profileInput.avatar
         : null;
     const avatarMeta =
@@ -193,14 +195,6 @@ export const ProfileContextProvider = ({ children }) => {
       if (!user?.email || !profileId) return false;
       const rawName = String(updates.name || "").trim();
       const cleanName = rawName.slice(0, 24);
-      const avatarValue =
-        typeof updates.avatar === "string" && isCloudinaryUrl(updates.avatar)
-          ? updates.avatar
-          : null;
-      const avatarMeta =
-        updates?.avatarMeta && typeof updates.avatarMeta === "object"
-          ? updates.avatarMeta
-          : null;
       const pinCode =
         typeof updates.pinCode === "string" && updates.pinCode.trim()
           ? updates.pinCode.replace(/\D/g, "").slice(0, 4)
@@ -217,11 +211,9 @@ export const ProfileContextProvider = ({ children }) => {
                 displayName: cleanName,
               }
             : {}),
-          avatar: avatarValue,
-          avatarMeta: avatarMeta || null,
-          avatarBase64: deleteField(),
-          locked,
-          pinCode: locked ? pinCode : null,
+          ...avatarUpdates(updates),
+          ...(Object.prototype.hasOwnProperty.call(updates, "avatar") ? { avatarBase64: deleteField() } : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, "locked") ? { locked, pinCode: locked ? pinCode : null } : {}),
           updatedAt: serverTimestamp(),
         },
         { merge: true },

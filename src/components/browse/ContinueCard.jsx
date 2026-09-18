@@ -1,21 +1,12 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const ContinueCard = ({ item }) => {
-  const navigate = useNavigate();
 
   const progress = Math.min(Math.max(item.progress ?? 0.2, 0.05), 0.95);
 
-  const handleClick = () => {
-    if (item.mediaType === "tv") {
-      navigate(`/shows/${item.id}`);
-    } else {
-      navigate(`/movies/${item.id}`);
-    }
-  };
-
   return (
-    <div
-      onClick={handleClick}
+    <Link
+      to={item.mediaType === "tv" ? `/shows/${item.id}?resume=1` : `/movies/${item.id}?resume=1`}
       className="relative min-w-[220px] cursor-pointer group"
     >
       <img
@@ -39,7 +30,7 @@ const ContinueCard = ({ item }) => {
           style={{ width: `${progress * 100}%` }}
         />
       </div>
-    </div>
+    </Link>
   );
 };
 

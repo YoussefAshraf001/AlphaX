@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import WatchDetails from "../components/content/WatchDetails";
+import { completionFromCount } from "../utils/episodeCompletion";
 import {
   doc,
   onSnapshot,
@@ -8,6 +10,7 @@ import {
   serverTimestamp,
   collection,
   deleteDoc,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
@@ -422,6 +425,11 @@ const ShowDetails = () => {
 
     if (status === newStatus) {
       toast(`Already marked as "${newStatus}"`, { icon: "i" });
+      return;
+    }
+
+    if (newStatus === "Finished") {
+      await saveEpisodeProgress(totalEpisodesNumber);
       return;
     }
 
@@ -1113,36 +1121,49 @@ const ShowDetails = () => {
         ...profileSavedItemPath(user.email, activeProfileId, "shows", show.id),
       );
 
-      await setDoc(
-        ref,
-        {
-          id: show.id,
-          title: show.name,
-          poster: show.poster_path ?? null,
-          backdrop: show.backdrop_path ?? null,
-          overview: show.overview,
-          releaseDate: show.first_air_date ?? null,
-          rating: show.vote_average,
-          mediaType: "tv",
-          totalEpisodes: totalEpisodesNumber || null,
-          totalSeasons:
-            Number.isFinite(Number(show.number_of_seasons)) &&
-            Number(show.number_of_seasons) > 0
-              ? Number(show.number_of_seasons)
-              : null,
-          next_episode_to_air: show.next_episode_to_air ?? null,
-          last_episode_to_air: show.last_episode_to_air ?? null,
-          seasons: Array.isArray(show.seasons) ? show.seasons : [],
-          watchedEpisodes: clamped,
-          currentSeason:
-            clamped > 0 ? getSeasonEpisodeMeta(clamped)?.season || null : null,
-          currentEpisode:
-            clamped > 0 ? getSeasonEpisodeMeta(clamped)?.episode || null : null,
-          status: nextStatus,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        const previous = snapshot.exists() ? snapshot.data() : {};
+        transaction.set(
+          ref,
+          {
+            ...completionFromCount(
+              previous,
+              normalizedSeasonEpisodeCounts,
+              clamped,
+            ),
+            id: show.id,
+            title: show.name,
+            poster: show.poster_path ?? null,
+            backdrop: show.backdrop_path ?? null,
+            overview: show.overview,
+            releaseDate: show.first_air_date ?? null,
+            rating: show.vote_average,
+            mediaType: "tv",
+            totalEpisodes: totalEpisodesNumber || null,
+            totalSeasons:
+              Number.isFinite(Number(show.number_of_seasons)) &&
+              Number(show.number_of_seasons) > 0
+                ? Number(show.number_of_seasons)
+                : null,
+            next_episode_to_air: show.next_episode_to_air ?? null,
+            last_episode_to_air: show.last_episode_to_air ?? null,
+            seasons: Array.isArray(show.seasons) ? show.seasons : [],
+            watchedEpisodes: clamped,
+            currentSeason:
+              clamped > 0
+                ? getSeasonEpisodeMeta(clamped)?.season || null
+                : null,
+            currentEpisode:
+              clamped > 0
+                ? getSeasonEpisodeMeta(clamped)?.episode || null
+                : null,
+            status: nextStatus,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
 
       setStatus(nextStatus);
     } catch {
@@ -1210,677 +1231,694 @@ const ShowDetails = () => {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="relative z-10 px-4 md:px-8 pt-24 pb-12"
       >
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-5 md:p-8 shadow-2xl">
-            <div className="mb-4">
-              <button
-                onClick={() => {
-                  if (canGoBack) navigate(-1);
-                }}
-                disabled={!canGoBack}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-white/10 hover:bg-white/20 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white/10"
-              >
-                <IoMdArrowBack size={20} />
-                Go Back
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-              <div className="lg:col-span-4">
-                <div className="relative w-full max-w-[320px] mx-auto">
-                  {show.poster_path ? (
-                    <motion.img
-                      src={`https://image.tmdb.org/t/p/w500/${show.poster_path}`}
-                      alt={show.name}
-                      initial={{ opacity: 0, scale: 1.05 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                      className="w-full h-[460px] object-cover rounded-2xl shadow-2xl shadow-black/60"
-                    />
-                  ) : (
-                    <div className="w-full h-[460px] rounded-2xl bg-neutral-800 border border-white/10 flex items-center justify-center text-sm text-white/70">
-                      No poster available
-                    </div>
-                  )}
-                  <button
-                    onClick={toggleFavourite}
-                    title={
-                      isUnreleased
-                        ? "Favourites unlock on release"
-                        : favourite
-                          ? "Remove favourite"
-                          : "Add favourite"
-                    }
-                    className={`absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center transition ${
-                      isUnreleased
-                        ? "bg-black/65 text-white/45 border border-white/30 shadow-lg shadow-black/70 backdrop-blur-sm"
-                        : favourite
-                          ? "bg-red-600/95 border border-red-300/60 shadow-lg shadow-red-900/40 backdrop-blur-sm"
-                          : "bg-black/75 border border-white/45 shadow-lg shadow-black/70 backdrop-blur-sm hover:bg-black/90"
-                    }`}
-                  >
-                    {favourite ? (
-                      <FaHeart size={14} />
-                    ) : (
-                      <FaRegHeart size={14} />
-                    )}
-                  </button>
-                </div>
+        <WatchDetails
+          key={`${id}:${user?.email || "guest"}:${activeProfileId}`}
+          media={show}
+          type="tv"
+          email={user?.email}
+          profileId={activeProfileId}
+        >
+          <div className="max-w-6xl mx-auto space-y-6">
+            <div className="rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-5 md:p-8 shadow-2xl">
+              <div className="mb-4">
+                <button
+                  onClick={() => {
+                    if (canGoBack) navigate(-1);
+                  }}
+                  disabled={!canGoBack}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-white/10 hover:bg-white/20 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white/10"
+                >
+                  <IoMdArrowBack size={20} />
+                  Go Back
+                </button>
               </div>
 
-              <div className="lg:col-span-8 flex flex-col gap-5">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">
-                      {show.name}
-                    </h1>
-                    {status && (
-                      <button
-                        onClick={() => setRemoveConfirmOpen(true)}
-                        className="shrink-0 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold transition bg-white/10 hover:bg-red-600/80 text-white"
-                      >
-                        Remove
-                      </button>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+                <div className="lg:col-span-3 min-w-0 max-md:max-w-[180px] [&_img]:!h-auto [&_img]:max-h-[390px] [&_img]:!rounded-lg [&_img]:!shadow-none">
+                  <div className="relative w-full max-w-[320px] mx-auto">
+                    {show.poster_path ? (
+                      <motion.img
+                        src={`https://image.tmdb.org/t/p/w500/${show.poster_path}`}
+                        alt={show.name}
+                        initial={{ opacity: 0, scale: 1.05 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className="w-full h-[460px] object-cover rounded-2xl shadow-2xl shadow-black/60"
+                      />
+                    ) : (
+                      <div className="w-full h-[460px] rounded-2xl bg-neutral-800 border border-white/10 flex items-center justify-center text-sm text-white/70">
+                        No poster available
+                      </div>
                     )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <motion.span
-                      layout
-                      onHoverStart={() => setIsFirstAirDateHovered(true)}
-                      onHoverEnd={() => setIsFirstAirDateHovered(false)}
-                      transition={{
-                        layout: { type: "spring", stiffness: 320, damping: 28 },
-                      }}
-                      className="px-3 py-1 rounded-full bg-white/10 text-neutral-200 overflow-hidden whitespace-nowrap inline-flex items-center"
-                    >
-                      <motion.span
-                        initial={false}
-                        animate={{
-                          maxWidth:
-                            isFirstAirDateHovered && hasValidFirstAirDate
-                              ? 0
-                              : 56,
-                          opacity:
-                            isFirstAirDateHovered && hasValidFirstAirDate
-                              ? 0
-                              : 1,
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 360,
-                          damping: 30,
-                        }}
-                        className="inline-block overflow-hidden"
-                      >
-                        {releaseYear}
-                      </motion.span>
-                      <motion.span
-                        initial={false}
-                        animate={{
-                          maxWidth:
-                            isFirstAirDateHovered && hasValidFirstAirDate
-                              ? 220
-                              : 0,
-                          opacity:
-                            isFirstAirDateHovered && hasValidFirstAirDate
-                              ? 1
-                              : 0,
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 320,
-                          damping: 28,
-                        }}
-                        className="inline-block overflow-hidden"
-                      >
-                        {fullFirstAirDate}
-                      </motion.span>
-                    </motion.span>
-                    <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
-                      {seasonsDisplay} seasons
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
-                      {runtimeDisplay}
-                    </span>
-                    <span className="flex items-center gap-1 px-3 py-1 rounded-full border border-yellow-400/40 bg-yellow-500/10 text-yellow-200">
-                      <MdStarRate size={15} className="text-yellow-300" />
-                      {scorePercentDisplay}
-                    </span>
-                  </div>
-
-                  <div className="pt-1">
                     <button
-                      onClick={handleWatchLaterClick}
-                      className="rounded-xl border text-white font-semibold border-gray-300 hover:bg-gray-300 hover:text-black hover:-translate-y-1 transform ease-in-out duration-300 py-2 px-5"
-                    >
-                      Watch Trailer
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-neutral-300 leading-relaxed text-sm md:text-base max-w-3xl">
-                  {show.overview}
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  {(show.genres || []).map((genre) => (
-                    <span
-                      key={genre.id}
-                      className="px-3 py-1 rounded-full text-xs font-medium bg-white/15 text-white border border-white/25"
-                    >
-                      {genre.name}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-xs uppercase tracking-wide text-neutral-400">
-                      Language
-                    </p>
-                    <p className="text-sm font-semibold text-white uppercase">
-                      {show.original_language || "N/A"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-xs uppercase tracking-wide text-neutral-400">
-                      Audience Score
-                    </p>
-                    <p className="text-sm font-semibold text-white">
-                      {scorePercentDisplay}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-xs uppercase tracking-wide text-neutral-400">
-                      Status
-                    </p>
-                    <p className="text-sm font-semibold text-white">
-                      {show.status || "N/A"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-xs uppercase tracking-wide text-neutral-400">
-                      {airDateLabel}
-                    </p>
-                    <p className="text-sm font-semibold text-white">
-                      {airDateValue}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-2 pt-1">
-                  {STATUS_ACTIONS.map((s) => (
-                    <button
-                      key={s.key}
-                      onClick={() => saveWithStatus(s.key)}
-                      title={s.label}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
-                        status === s.key
-                          ? "bg-red-600 text-white shadow-lg shadow-red-700/30"
-                          : "bg-white/10 hover:bg-white/20 text-neutral-200"
+                      onClick={toggleFavourite}
+                      title={
+                        isUnreleased
+                          ? "Favourites unlock on release"
+                          : favourite
+                            ? "Remove favourite"
+                            : "Add favourite"
+                      }
+                      className={`absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center transition ${
+                        isUnreleased
+                          ? "bg-black/65 text-white/45 border border-white/30 shadow-lg shadow-black/70 backdrop-blur-sm"
+                          : favourite
+                            ? "bg-red-600/95 border border-red-300/60 shadow-lg shadow-red-900/40 backdrop-blur-sm"
+                            : "bg-black/75 border border-white/45 shadow-lg shadow-black/70 backdrop-blur-sm hover:bg-black/90"
                       }`}
                     >
-                      {s.label}
+                      {favourite ? (
+                        <FaHeart size={14} />
+                      ) : (
+                        <FaRegHeart size={14} />
+                      )}
                     </button>
-                  ))}
+                  </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-neutral-400">
-                        Episode Progress
-                      </p>
-                      <p className="text-sm font-semibold text-white mt-1">
-                        {safeWatchedEpisodes} / {totalEpisodesNumber || "?"}{" "}
-                        watched
-                      </p>
-                      <p className="text-xs text-white/65 mt-0.5">
-                        {totalEpisodesNumber && nextEpisodeMeta
-                          ? `Up next S${nextEpisodeMeta.season} • E${nextEpisodeMeta.episode}`
-                          : totalEpisodesNumber
-                            ? `Completed • ${episodesLeft} left • ${progressPercent}%`
-                            : "Episode total unavailable"}
-                      </p>
-                      <p className="text-xs text-white/55 mt-0.5">
-                        {currentEpisodeMeta
-                          ? `Last watched S${currentEpisodeMeta.season} • E${currentEpisodeMeta.episode}`
-                          : "No episodes marked yet"}
-                      </p>
-                      {nextUpcomingSeason && (
-                        <p className="text-xs text-amber-300/90 mt-1">
-                          {`Season ${nextUpcomingSeason.seasonNumber} coming ${nextUpcomingSeasonDate}`}
-                        </p>
+                <div className="lg:col-span-9 min-w-0 flex flex-col gap-5 [&>div:first-child>div:first-child]:flex-wrap [&>div:first-child>div:first-child]:gap-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">
+                        {show.name}
+                      </h1>
+                      {status && (
+                        <button
+                          onClick={() => setRemoveConfirmOpen(true)}
+                          className="shrink-0 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold transition bg-white/10 hover:bg-red-600/80 text-white"
+                        >
+                          Remove
+                        </button>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const clamped = updateEpisodeProgressLocal(0);
-                          saveEpisodeProgress(clamped);
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <motion.span
+                        layout
+                        onHoverStart={() => setIsFirstAirDateHovered(true)}
+                        onHoverEnd={() => setIsFirstAirDateHovered(false)}
+                        transition={{
+                          layout: {
+                            type: "spring",
+                            stiffness: 320,
+                            damping: 28,
+                          },
                         }}
-                        disabled={safeWatchedEpisodes <= 0}
-                        title="Reset progress"
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                        className="px-3 py-1 rounded-full bg-white/10 text-neutral-200 overflow-hidden whitespace-nowrap inline-flex items-center"
                       >
-                        <MdRestartAlt size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (isHoldingRef.current) return;
+                        <motion.span
+                          initial={false}
+                          animate={{
+                            maxWidth:
+                              isFirstAirDateHovered && hasValidFirstAirDate
+                                ? 0
+                                : 56,
+                            opacity:
+                              isFirstAirDateHovered && hasValidFirstAirDate
+                                ? 0
+                                : 1,
+                          }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 360,
+                            damping: 30,
+                          }}
+                          className="inline-block overflow-hidden"
+                        >
+                          {releaseYear}
+                        </motion.span>
+                        <motion.span
+                          initial={false}
+                          animate={{
+                            maxWidth:
+                              isFirstAirDateHovered && hasValidFirstAirDate
+                                ? 220
+                                : 0,
+                            opacity:
+                              isFirstAirDateHovered && hasValidFirstAirDate
+                                ? 1
+                                : 0,
+                          }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 320,
+                            damping: 28,
+                          }}
+                          className="inline-block overflow-hidden"
+                        >
+                          {fullFirstAirDate}
+                        </motion.span>
+                      </motion.span>
+                      <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
+                        {seasonsDisplay} seasons
+                      </span>
+                      <span className="px-3 py-1 rounded-full bg-white/10 text-neutral-200">
+                        {runtimeDisplay}
+                      </span>
+                      <span className="flex items-center gap-1 px-3 py-1 rounded-full border border-yellow-400/40 bg-yellow-500/10 text-yellow-200">
+                        <MdStarRate size={15} className="text-yellow-300" />
+                        {scorePercentDisplay}
+                      </span>
+                    </div>
 
-                          const next = safeWatchedEpisodes - 1;
-                          const clamped = updateEpisodeProgressLocal(next);
-                          saveEpisodeProgress(clamped);
-                        }}
-                        onMouseDown={() => startHold(-1)}
-                        onMouseUp={stopHold}
-                        onMouseLeave={stopHold}
-                        onTouchStart={() => startHold(-1)}
-                        onTouchEnd={stopHold}
-                        disabled={safeWatchedEpisodes <= 0}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        -
-                      </button>
+                    <div className="pt-1">
                       <button
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-                        onClick={() => {
-                          if (isHoldingRef.current) return;
-
-                          const next = safeWatchedEpisodes + 1;
-                          const clamped = updateEpisodeProgressLocal(next);
-                          saveEpisodeProgress(clamped);
-                        }}
-                        onMouseDown={() => startHold(1)}
-                        onMouseUp={stopHold}
-                        onMouseLeave={stopHold}
-                        onTouchStart={() => startHold(1)}
-                        onTouchEnd={stopHold}
+                        onClick={handleWatchLaterClick}
+                        className="rounded-xl border text-white font-semibold border-gray-300 hover:bg-gray-300 hover:text-black hover:-translate-y-1 transform ease-in-out duration-300 py-2 px-5"
                       >
-                        +
+                        Watch Trailer
                       </button>
                     </div>
                   </div>
-                  <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full bg-red-500 transition-all duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                  {seasonProgressTargets.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-[11px] uppercase tracking-wide text-neutral-400 mb-2">
-                        Quick mark full season
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {seasonProgressTargets.map((season) => {
-                          const isComplete =
-                            safeWatchedEpisodes >= season.seasonEndEpisode;
 
-                          return (
-                            <button
-                              key={season.seasonNumber}
-                              onClick={() =>
-                                markSeasonComplete(season.seasonNumber)
-                              }
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                                isComplete
-                                  ? "bg-red-600/90 text-white"
-                                  : "bg-white/10 hover:bg-white/20 text-white/85"
-                              }`}
-                            >
-                              {`S${season.seasonNumber}`}
-                            </button>
-                          );
-                        })}
+                  <p className="text-neutral-300 leading-relaxed text-sm md:text-base max-w-3xl">
+                    {show.overview}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(show.genres || []).map((genre) => (
+                      <span
+                        key={genre.id}
+                        className="px-3 py-1 rounded-full text-xs font-medium bg-white/15 text-white border border-white/25"
+                      >
+                        {genre.name}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                      <p className="text-xs uppercase tracking-wide text-neutral-400">
+                        Language
+                      </p>
+                      <p className="text-sm font-semibold text-white uppercase">
+                        {show.original_language || "N/A"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                      <p className="text-xs uppercase tracking-wide text-neutral-400">
+                        Audience Score
+                      </p>
+                      <p className="text-sm font-semibold text-white">
+                        {scorePercentDisplay}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                      <p className="text-xs uppercase tracking-wide text-neutral-400">
+                        Status
+                      </p>
+                      <p className="text-sm font-semibold text-white">
+                        {show.status || "N/A"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                      <p className="text-xs uppercase tracking-wide text-neutral-400">
+                        {airDateLabel}
+                      </p>
+                      <p className="text-sm font-semibold text-white">
+                        {airDateValue}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-2 pt-1">
+                    {STATUS_ACTIONS.map((s) => (
+                      <button
+                        key={s.key}
+                        onClick={() => saveWithStatus(s.key)}
+                        title={s.label}
+                        className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
+                          status === s.key
+                            ? "bg-red-600 text-white shadow-lg shadow-red-700/30"
+                            : "bg-white/10 hover:bg-white/20 text-neutral-200"
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-neutral-400">
+                          Episode Progress
+                        </p>
+                        <p className="text-sm font-semibold text-white mt-1">
+                          {safeWatchedEpisodes} / {totalEpisodesNumber || "?"}{" "}
+                          watched
+                        </p>
+                        <p className="text-xs text-white/65 mt-0.5">
+                          {totalEpisodesNumber && nextEpisodeMeta
+                            ? `Up next S${nextEpisodeMeta.season} • E${nextEpisodeMeta.episode}`
+                            : totalEpisodesNumber
+                              ? `Completed • ${episodesLeft} left • ${progressPercent}%`
+                              : "Episode total unavailable"}
+                        </p>
+                        <p className="text-xs text-white/55 mt-0.5">
+                          {currentEpisodeMeta
+                            ? `Last watched S${currentEpisodeMeta.season} • E${currentEpisodeMeta.episode}`
+                            : "No episodes marked yet"}
+                        </p>
+                        {nextUpcomingSeason && (
+                          <p className="text-xs text-amber-300/90 mt-1">
+                            {`Season ${nextUpcomingSeason.seasonNumber} coming ${nextUpcomingSeasonDate}`}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const clamped = updateEpisodeProgressLocal(0);
+                            saveEpisodeProgress(clamped);
+                          }}
+                          disabled={safeWatchedEpisodes <= 0}
+                          title="Reset progress"
+                          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                        >
+                          <MdRestartAlt size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (isHoldingRef.current) return;
+
+                            const next = safeWatchedEpisodes - 1;
+                            const clamped = updateEpisodeProgressLocal(next);
+                            saveEpisodeProgress(clamped);
+                          }}
+                          onMouseDown={() => startHold(-1)}
+                          onMouseUp={stopHold}
+                          onMouseLeave={stopHold}
+                          onTouchStart={() => startHold(-1)}
+                          onTouchEnd={stopHold}
+                          disabled={safeWatchedEpisodes <= 0}
+                          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          -
+                        </button>
+                        <button
+                          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                          onClick={() => {
+                            if (isHoldingRef.current) return;
+
+                            const next = safeWatchedEpisodes + 1;
+                            const clamped = updateEpisodeProgressLocal(next);
+                            saveEpisodeProgress(clamped);
+                          }}
+                          onMouseDown={() => startHold(1)}
+                          onMouseUp={stopHold}
+                          onMouseLeave={stopHold}
+                          onTouchStart={() => startHold(1)}
+                          onTouchEnd={stopHold}
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
+                    <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full bg-red-500 transition-all duration-300"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    {seasonProgressTargets.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11px] uppercase tracking-wide text-neutral-400 mb-2">
+                          Quick mark full season
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {seasonProgressTargets.map((season) => {
+                            const isComplete =
+                              safeWatchedEpisodes >= season.seasonEndEpisode;
 
-                <PersonalRating
-                  ratingType="stars"
-                  value={userRatingValue}
-                  starSizeClass="text-2xl"
-                  onRate={(value) => {
-                    setUserRatingValue(value);
-                    savePersonalRating(value);
-                  }}
-                  disabled={!user?.email || isUnreleased}
-                  disabledLabel={
-                    !user?.email
-                      ? "Sign in to rate this series."
-                      : "This series is unreleased. Rating unlocks on release."
-                  }
-                  disabledToastMessage={
-                    !user?.email
-                      ? "Sign in to rate titles."
-                      : "Rating unlocks on release"
-                  }
-                />
-
-                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs uppercase tracking-wide text-neutral-400">
-                      Personal Notes
-                    </p>
-                    {savedNotes && (
-                      <button
-                        onClick={() => saveNotes("")}
-                        disabled={
-                          !user?.email || isSavingNotes || isNotesLoading
-                        }
-                        className="text-[11px] px-2 py-1 rounded-full border border-white/20 bg-white/10 text-white/80 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Clear
-                      </button>
+                            return (
+                              <button
+                                key={season.seasonNumber}
+                                onClick={() =>
+                                  markSeasonComplete(season.seasonNumber)
+                                }
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
+                                  isComplete
+                                    ? "bg-red-600/90 text-white"
+                                    : "bg-white/10 hover:bg-white/20 text-white/85"
+                                }`}
+                              >
+                                {`S${season.seasonNumber}`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <textarea
-                    value={notesDraft}
-                    onChange={(e) => setNotesDraft(e.target.value)}
-                    disabled={!user?.email || isSavingNotes || isNotesLoading}
-                    rows={3}
-                    placeholder="Add your thoughts, reminders, or watch notes..."
-                    className="mt-2 w-full min-h-[50px] max-h-[200px] rounded-lg border border-transparent bg-black/40 px-3 py-2 text-sm text-white placeholder-white/45 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      onClick={() => saveNotes(notesDraft)}
-                      disabled={
-                        !user?.email ||
-                        isSavingNotes ||
-                        isNotesLoading ||
-                        notesDraft === savedNotes
-                      }
-                      className="px-3 py-1.5 rounded-md text-xs font-semibold border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isNotesLoading
-                        ? "Loading..."
-                        : isSavingNotes
-                          ? "Saving..."
-                          : "Save Notes"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <AnimatePresence>
-            {trailerUrl && (
-              <div className="fixed inset-0 flex items-center justify-center z-[102] bg-black/80 backdrop-blur-sm p-4">
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-[#111] border border-white/10 p-4 md:p-5 rounded-2xl w-full max-w-5xl"
-                >
-                  <div className="pb-3">
-                    <div className="flex justify-between items-center gap-3 px-1">
-                      <h2 className="font-semibold text-white text-lg">
-                        {show?.name} Trailer
-                      </h2>
+                  <PersonalRating
+                    ratingType="stars"
+                    value={userRatingValue}
+                    starSizeClass="text-2xl"
+                    onRate={(value) => {
+                      setUserRatingValue(value);
+                      savePersonalRating(value);
+                    }}
+                    disabled={!user?.email || isUnreleased}
+                    disabledLabel={
+                      !user?.email
+                        ? "Sign in to rate this series."
+                        : "This series is unreleased. Rating unlocks on release."
+                    }
+                    disabledToastMessage={
+                      !user?.email
+                        ? "Sign in to rate titles."
+                        : "Rating unlocks on release"
+                    }
+                  />
+
+                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs uppercase tracking-wide text-neutral-400">
+                        Personal Notes
+                      </p>
+                      {savedNotes && (
+                        <button
+                          onClick={() => saveNotes("")}
+                          disabled={
+                            !user?.email || isSavingNotes || isNotesLoading
+                          }
+                          className="text-[11px] px-2 py-1 rounded-full border border-white/20 bg-white/10 text-white/80 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={notesDraft}
+                      onChange={(e) => setNotesDraft(e.target.value)}
+                      disabled={!user?.email || isSavingNotes || isNotesLoading}
+                      rows={3}
+                      placeholder="Add your thoughts, reminders, or watch notes..."
+                      className="mt-2 w-full min-h-[50px] max-h-[200px] rounded-lg border border-transparent bg-black/40 px-3 py-2 text-sm text-white placeholder-white/45 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                    <div className="mt-2 flex justify-end">
                       <button
-                        onClick={handleClose}
-                        className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm"
+                        onClick={() => saveNotes(notesDraft)}
+                        disabled={
+                          !user?.email ||
+                          isSavingNotes ||
+                          isNotesLoading ||
+                          notesDraft === savedNotes
+                        }
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Close
+                        {isNotesLoading
+                          ? "Loading..."
+                          : isSavingNotes
+                            ? "Saving..."
+                            : "Save Notes"}
                       </button>
                     </div>
                   </div>
-                  <iframe
-                    className="w-full h-60 md:h-80 lg:h-[520px] rounded-xl"
-                    src={trailerUrl}
-                    title="Trailer"
-                    frameBorder="0"
-                    allowFullScreen
-                  ></iframe>
-                </motion.div>
+                </div>
               </div>
-            )}
-          </AnimatePresence>
-
-          <div
-            className={`rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 md:p-6 max-h-[760px] flex flex-col overflow-hidden ${
-              activeTab === "review"
-                ? "h-[35vh] min-h-[30vh] md:h-[30vh] md:min-h-[30vh]"
-                : "h-auto min-h-[340px] md:h-[30vh] md:min-h-[30vh]"
-            }`}
-          >
-            <div className="flex flex-wrap justify-center gap-2">
-              {["cast", "review", "screenshots", "awards"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => handleTabClick(tab)}
-                  className={`shrink-0 py-2 px-4 text-sm rounded-full capitalize transition ${
-                    activeTab === tab
-                      ? "bg-white text-black"
-                      : "bg-white/10 hover:bg-white/20 text-white"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
             </div>
+
+            <AnimatePresence>
+              {trailerUrl && (
+                <div className="fixed inset-0 flex items-center justify-center z-[102] bg-black/80 backdrop-blur-sm p-4">
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="bg-[#111] border border-white/10 p-4 md:p-5 rounded-2xl w-full max-w-5xl"
+                  >
+                    <div className="pb-3">
+                      <div className="flex justify-between items-center gap-3 px-1">
+                        <h2 className="font-semibold text-white text-lg">
+                          {show?.name} Trailer
+                        </h2>
+                        <button
+                          onClick={handleClose}
+                          className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                    <iframe
+                      className="w-full h-60 md:h-80 lg:h-[520px] rounded-xl"
+                      src={trailerUrl}
+                      title="Trailer"
+                      frameBorder="0"
+                      allowFullScreen
+                    ></iframe>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
 
             <div
-              className={`mt-6 flex-1 min-h-0 pr-1 ${
-                activeTab === "cast" ? "overflow-y-hidden" : "overflow-y-auto"
+              className={`rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 md:p-6 max-h-[760px] flex flex-col overflow-hidden ${
+                activeTab === "review"
+                  ? "h-[35vh] min-h-[30vh] md:h-[30vh] md:min-h-[30vh]"
+                  : "h-auto min-h-[340px] md:h-[30vh] md:min-h-[30vh]"
               }`}
             >
-              {activeTab === "cast" && (
-                <div className="relative px-6 md:px-10">
-                  <Slider {...castSliderSettings} key={cast.length}>
-                    {cast.map((actor) => {
-                      const actorRating = Number(
-                        actorRatingsMap[actor.id] || 0,
-                      );
-                      const isLiked = likedActors.has(actor.id);
-                      const actorReaction =
-                        actorRating > 0
-                          ? ACTOR_REACTION_EMOJIS[Math.max(0, actorRating - 1)]
-                          : "Rate";
-                      const canShowImage =
-                        Boolean(actor.profile_path) &&
-                        !failedCastImages[actor.id];
-                      const profileSrc = canShowImage
-                        ? `https://image.tmdb.org/t/p/w500/${actor.profile_path}`
-                        : null;
-                      const isImageLoaded = !!loadedCastImages[actor.id];
+              <div className="flex flex-wrap justify-center gap-2">
+                {["cast", "review", "screenshots", "awards"].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => handleTabClick(tab)}
+                    className={`shrink-0 py-2 px-4 text-sm rounded-full capitalize transition ${
+                      activeTab === tab
+                        ? "bg-white text-black"
+                        : "bg-white/10 hover:bg-white/20 text-white"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
 
-                      return (
-                        <motion.div
-                          key={actor._castKey || actor.id}
-                          className="flex-shrink-0 w-full p-1.5"
-                          initial={{ scale: 0.9, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.9, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <div className="flex items-center bg-[#131313] rounded-2xl overflow-hidden shadow-xl relative">
-                            <div className="w-[88px] h-32 relative bg-neutral-800 overflow-hidden">
-                              {canShowImage ? (
-                                <>
-                                  <div
-                                    className={`absolute inset-0 bg-gradient-to-br from-neutral-700 to-neutral-800 transition-opacity duration-300 ${
-                                      isImageLoaded
-                                        ? "opacity-0 pointer-events-none"
-                                        : "opacity-100"
-                                    }`}
-                                  />
-                                  <img
-                                    src={profileSrc}
-                                    alt={actor.name}
-                                    loading="lazy"
-                                    onLoad={() => markCastImageLoaded(actor.id)}
-                                    onError={() =>
-                                      markCastImageFailed(actor.id)
-                                    }
-                                    className={`w-full h-full object-cover transition-opacity duration-500 ${
-                                      isImageLoaded
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    }`}
-                                  />
-                                </>
-                              ) : (
-                                <div className="absolute inset-0 bg-neutral-700/70 flex items-center justify-center">
-                                  <div className="text-[10px] text-white/80 text-center px-2">
-                                    No Image
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+              <div
+                className={`mt-6 flex-1 min-h-0 pr-1 ${
+                  activeTab === "cast" ? "overflow-y-hidden" : "overflow-y-auto"
+                }`}
+              >
+                {activeTab === "cast" && (
+                  <div className="relative px-6 md:px-10">
+                    <Slider {...castSliderSettings} key={cast.length}>
+                      {cast.map((actor) => {
+                        const actorRating = Number(
+                          actorRatingsMap[actor.id] || 0,
+                        );
+                        const isLiked = likedActors.has(actor.id);
+                        const actorReaction =
+                          actorRating > 0
+                            ? ACTOR_REACTION_EMOJIS[
+                                Math.max(0, actorRating - 1)
+                              ]
+                            : "Rate";
+                        const canShowImage =
+                          Boolean(actor.profile_path) &&
+                          !failedCastImages[actor.id];
+                        const profileSrc = canShowImage
+                          ? `https://image.tmdb.org/t/p/w500/${actor.profile_path}`
+                          : null;
+                        const isImageLoaded = !!loadedCastImages[actor.id];
 
-                            <div className="flex-grow p-2 flex flex-col justify-between">
-                              <Link
-                                to={`/person/${actor.id}`}
-                                className="text-lg font-semibold text-white text-center hover:underline"
-                              >
-                                {actor.name}
-                              </Link>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setActorActionTarget(actor)}
-                              className="absolute top-2 right-2 min-w-[42px] px-2 h-7 rounded-full bg-black/65 border border-white/25 text-[11px] text-white/90 hover:bg-black/85 transition"
-                              title="Rate / Favourite actor"
-                            >
-                              <span className="inline-flex items-center gap-1">
-                                <span>{actorReaction}</span>
-                                {isLiked ? (
+                        return (
+                          <motion.div
+                            key={actor._castKey || actor.id}
+                            className="flex-shrink-0 w-full p-1.5"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <div className="flex items-center bg-[#131313] rounded-2xl overflow-hidden shadow-xl relative">
+                              <div className="w-[88px] h-32 relative bg-neutral-800 overflow-hidden">
+                                {canShowImage ? (
                                   <>
-                                    <span className="text-white/30 scale-110">
-                                      |
-                                    </span>
-                                    <FaHeart
-                                      className="text-red-500"
-                                      size={10}
+                                    <div
+                                      className={`absolute inset-0 bg-gradient-to-br from-neutral-700 to-neutral-800 transition-opacity duration-300 ${
+                                        isImageLoaded
+                                          ? "opacity-0 pointer-events-none"
+                                          : "opacity-100"
+                                      }`}
+                                    />
+                                    <img
+                                      src={profileSrc}
+                                      alt={actor.name}
+                                      loading="lazy"
+                                      onLoad={() =>
+                                        markCastImageLoaded(actor.id)
+                                      }
+                                      onError={() =>
+                                        markCastImageFailed(actor.id)
+                                      }
+                                      className={`w-full h-full object-cover transition-opacity duration-500 ${
+                                        isImageLoaded
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      }`}
                                     />
                                   </>
-                                ) : null}
-                              </span>
-                            </button>
-                          </div>
-                          <span className="text-sm text-gray-300 block mt-1">
-                            as {actor.character ? `${actor.character}` : "TBA"}
-                          </span>
-                        </motion.div>
-                      );
-                    })}
-                  </Slider>
-                </div>
-              )}
+                                ) : (
+                                  <div className="absolute inset-0 bg-neutral-700/70 flex items-center justify-center">
+                                    <div className="text-[10px] text-white/80 text-center px-2">
+                                      No Image
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
 
-              {activeTab === "screenshots" && (
-                <div className="relative px-6 md:px-10">
-                  {backdrops.length ? (
-                    <Slider {...screenshotsSliderSettings}>
-                      {backdrops.map((backdrop, index) => (
-                        <motion.div
-                          key={backdrop.file_path}
-                          className="px-1"
-                          initial={{ scale: 0.9, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.9, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          onClick={() => {
-                            setSelectedBackdropIndex(index);
-                            setIsModalOpen(true);
-                          }}
-                        >
-                          <motion.img
-                            src={`https://image.tmdb.org/t/p/w500/${backdrop.file_path}`}
-                            alt={show.name}
-                            initial={{ opacity: 0, scale: 1.03 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.5 }}
-                            className="w-full h-[160px] md:h-[150px] object-cover rounded-2xl shadow-lg cursor-pointer border border-white/10"
-                          />
-                        </motion.div>
-                      ))}
-                    </Slider>
-                  ) : (
-                    <div className="w-full h-[170px] md:h-[190px] rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-white/70">
-                      No screenshots available for this title.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === "review" && (
-                <div className="pr-2">
-                  {reviews.length > 0 ? (
-                    reviews.map((review) => (
-                      <motion.div
-                        key={review.id}
-                        className="mb-3 p-4 rounded-xl bg-white/5 border border-white/10"
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <div className="flex items-start mb-2">
-                          {review.author_details.avatar_path ? (
-                            <img
-                              loading="lazy"
-                              src={`https://image.tmdb.org/t/p/w500${review.author_details.avatar_path}`}
-                              alt={review.author}
-                              className="w-12 h-12 rounded-full mr-3 object-cover"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-gray-500 mr-3 flex items-center justify-center text-white">
-                              ?
+                              <div className="flex-grow p-2 flex flex-col justify-between">
+                                <Link
+                                  to={`/person/${actor.id}`}
+                                  className="text-lg font-semibold text-white text-center hover:underline"
+                                >
+                                  {actor.name}
+                                </Link>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActorActionTarget(actor)}
+                                className="absolute top-2 right-2 min-w-[42px] px-2 h-7 rounded-full bg-black/65 border border-white/25 text-[11px] text-white/90 hover:bg-black/85 transition"
+                                title="Rate / Favourite actor"
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  <span>{actorReaction}</span>
+                                  {isLiked ? (
+                                    <>
+                                      <span className="text-white/30 scale-110">
+                                        |
+                                      </span>
+                                      <FaHeart
+                                        className="text-red-500"
+                                        size={10}
+                                      />
+                                    </>
+                                  ) : null}
+                                </span>
+                              </button>
                             </div>
-                          )}
-                          <div>
-                            <h3 className="font-bold">{review.author}</h3>
-                            <p className="text-gray-400">
-                              @{review.author_details.username}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="text-gray-300">{review.content}</p>
-                      </motion.div>
-                    ))
-                  ) : (
-                    <div className="w-full h-[170px] md:h-[190px] rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-white/70">
-                      No reviews available for this title.
-                    </div>
-                  )}
-                </div>
-              )}
+                            <span className="text-sm text-gray-300 block mt-1">
+                              as{" "}
+                              {actor.character ? `${actor.character}` : "TBA"}
+                            </span>
+                          </motion.div>
+                        );
+                      })}
+                    </Slider>
+                  </div>
+                )}
 
-              {activeTab === "awards" && (
-                <motion.div
-                  className="space-y-4 pb-4"
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 capitalize">
-                    {awards && awards !== "N/A" ? (
-                      <p className="text-gray-300 pb-1 text-center">
-                        <span className="ml-1">{awards}</span>
-                      </p>
+                {activeTab === "screenshots" && (
+                  <div className="relative px-6 md:px-10">
+                    {backdrops.length ? (
+                      <Slider {...screenshotsSliderSettings}>
+                        {backdrops.map((backdrop, index) => (
+                          <motion.div
+                            key={backdrop.file_path}
+                            className="px-1"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={() => {
+                              setSelectedBackdropIndex(index);
+                              setIsModalOpen(true);
+                            }}
+                          >
+                            <motion.img
+                              src={`https://image.tmdb.org/t/p/w500/${backdrop.file_path}`}
+                              alt={show.name}
+                              initial={{ opacity: 0, scale: 1.03 }}
+                              whileInView={{ opacity: 1, scale: 1 }}
+                              viewport={{ once: true }}
+                              transition={{ duration: 0.5 }}
+                              className="w-full h-[160px] md:h-[150px] object-cover rounded-2xl shadow-lg cursor-pointer border border-white/10"
+                            />
+                          </motion.div>
+                        ))}
+                      </Slider>
                     ) : (
-                      <div className="h-[120px] flex items-center justify-center text-sm text-white/70">
-                        No awards information available.
+                      <div className="w-full h-[170px] md:h-[190px] rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-white/70">
+                        No screenshots available for this title.
                       </div>
                     )}
                   </div>
-                </motion.div>
-              )}
+                )}
+
+                {activeTab === "review" && (
+                  <div className="pr-2">
+                    {reviews.length > 0 ? (
+                      reviews.map((review) => (
+                        <motion.div
+                          key={review.id}
+                          className="mb-3 p-4 rounded-xl bg-white/5 border border-white/10"
+                          initial={{ scale: 0.9, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.9, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <div className="flex items-start mb-2">
+                            {review.author_details.avatar_path ? (
+                              <img
+                                loading="lazy"
+                                src={`https://image.tmdb.org/t/p/w500${review.author_details.avatar_path}`}
+                                alt={review.author}
+                                className="w-12 h-12 rounded-full mr-3 object-cover"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-gray-500 mr-3 flex items-center justify-center text-white">
+                                ?
+                              </div>
+                            )}
+                            <div>
+                              <h3 className="font-bold">{review.author}</h3>
+                              <p className="text-gray-400">
+                                @{review.author_details.username}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-gray-300">{review.content}</p>
+                        </motion.div>
+                      ))
+                    ) : (
+                      <div className="w-full h-[170px] md:h-[190px] rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-white/70">
+                        No reviews available for this title.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "awards" && (
+                  <motion.div
+                    className="space-y-4 pb-4"
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 capitalize">
+                      {awards && awards !== "N/A" ? (
+                        <p className="text-gray-300 pb-1 text-center">
+                          <span className="ml-1">{awards}</span>
+                        </p>
+                      ) : (
+                        <div className="h-[120px] flex items-center justify-center text-sm text-white/70">
+                          No awards information available.
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </WatchDetails>
       </motion.div>
 
       <ScreenshotsModal

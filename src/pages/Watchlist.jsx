@@ -14,7 +14,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { IoAdd } from "react-icons/io5";
 import {
@@ -29,7 +29,7 @@ import { IoIosClose, IoIosPause } from "react-icons/io";
 import { MdDoneOutline } from "react-icons/md";
 import { FaTrash } from "react-icons/fa";
 import { ImSpinner2 } from "react-icons/im";
-import { FiImage, FiRefreshCw } from "react-icons/fi";
+import { FiImage, FiRefreshCw, FiSearch } from "react-icons/fi";
 import { UserAuth } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
 import PersonalRating from "../components/actions/PersonalRating";
@@ -343,15 +343,15 @@ const SidePanel = ({
       animate="show"
       className="
         hidden lg:block
-        w-80 shrink-0
+        w-[260px] shrink-0 self-start
         border-l border-white/10
-        bg-[#0d0d0d]
+        bg-[#121214]
         h-screen
         overflow-hidden
         pt-16
       "
     >
-      <div className="h-full min-h-0 px-4 py-4 grid grid-rows-3 gap-3">
+      <div className="h-full min-h-0 px-4 py-4 grid grid-rows-3 gap-3 [&>section]:!bg-transparent [&>section]:!border-0 [&>section]:!border-b [&>section]:!border-white/10 [&>section]:!rounded-none [&>section]:!px-0 [&_h3]:!text-[11px] [&_h3]:!text-zinc-400">
         <section className="min-h-0 border border-white/10 rounded-xl bg-white/[0.02] p-3 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-2 mb-3">
             <h3 className="text-xs uppercase text-white/40">
@@ -1108,6 +1108,7 @@ const Account = () => {
   const [actorRatingsById, setActorRatingsById] = useState({});
 
   const [mediaFilter, setMediaFilter] = useState("all");
+  const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortFilter, setSortFilter] = useState("recent");
   const [pageBySection, setPageBySection] = useState({});
@@ -2327,6 +2328,7 @@ const Account = () => {
   );
 
   const visible = items.filter((i) => {
+    if (!String(i.title || i.name || "").toLowerCase().includes(searchText.trim().toLowerCase())) return false;
     if (mediaFilter === "actors") return false;
     if (mediaFilter !== "all" && i.mediaType !== mediaFilter) return false;
     if (statusFilter !== "all" && i.status !== statusFilter) return false;
@@ -2535,7 +2537,7 @@ const Account = () => {
 
   useEffect(() => {
     setPageBySection({});
-  }, [mediaFilter, statusFilter, sortFilter, items.length]);
+  }, [mediaFilter, statusFilter, sortFilter, items.length, searchText]);
 
   const setSectionPage = (sectionKey, page) => {
     setPageBySection((prev) => ({
@@ -2549,7 +2551,7 @@ const Account = () => {
       variants={gridStagger}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4"
+      className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(165px,1fr))] gap-x-2.5 gap-y-4 sm:gap-x-[18px] sm:gap-y-6 [&>div]:!bg-[#19191d] [&>div]:border [&>div]:border-white/5 [&>div]:rounded-lg [&>div]:min-w-0"
     >
       {list.map((item) => (
         <motion.div
@@ -2664,27 +2666,10 @@ const Account = () => {
                     <FiRefreshCw size={12} />
                   )}
                 </motion.button>
-                <div
-                  className="relative w-full aspect-[2/3] bg-white/10 cursor-pointer overflow-hidden"
-                  onClick={(e) =>
-                    openPath(
-                      e,
-                      item.mediaType === "tv"
-                        ? `/shows/${item.id}`
-                        : `/movies/${item.id}`,
-                    )
-                  }
-                  onAuxClick={(e) => {
-                    if (e.button === 1) {
-                      e.preventDefault();
-                      openPath(
-                        e,
-                        item.mediaType === "tv"
-                          ? `/shows/${item.id}`
-                          : `/movies/${item.id}`,
-                      );
-                    }
-                  }}
+                <Link
+                  className="block relative w-full aspect-[2/3] bg-white/10 cursor-pointer overflow-hidden"
+                  to={item.mediaType === "tv" ? `/shows/${item.id}` : `/movies/${item.id}`}
+                  aria-label={`Open ${item.title}`}
                 >
                   {!isPosterReady && (
                     <div className="absolute inset-0 bg-white/10 animate-pulse" />
@@ -2704,7 +2689,7 @@ const Account = () => {
                       <FiImage size={22} />
                     </div>
                   )}
-                </div>
+                </Link>
 
                 <div className="p-3 space-y-2 min-h-[128px]">
                   <h3
@@ -3111,31 +3096,29 @@ const Account = () => {
       variants={fade}
       initial="hidden"
       animate="show"
-      className="h-screen bg-[#0a0a0a] text-white flex"
+      className="h-screen overflow-hidden bg-[#101012] text-white flex tracking-normal [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-rose-400 [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-rose-400"
     >
       {/* MAIN COLUMN */}
-      <div className="flex-1 flex flex-col overflow-hidden pt-16">
+      <div className="flex-1 flex flex-col min-w-0 pt-16 max-w-[1600px] mx-auto h-full overflow-y-auto">
         {/* HEADER */}
-        <header className="px-6 pt-4 pb-3 border-b border-white/10">
+        <header className="px-4 sm:px-7 pt-6 sm:pt-[38px] border-b border-white/10 shrink-0 [&>div:first-child]:gap-6 [&>div:first-child]:flex-wrap [&_h1]:text-3xl sm:[&_h1]:text-4xl [&_h1]:font-bold [&_h1]:mt-[7px]">
           <div className="flex items-center justify-between">
             {/* Context label */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs uppercase tracking-widest text-white/40">
-                Library
-              </span>
-              <span className="h-3 w-px bg-white/20" />
-              <span className="text-sm text-white/70">
-                {user.displayName}'s Watchlist
-              </span>
+            <div>
+              <span className="text-rose-400 text-xs">{selectedProfile?.displayName || selectedProfile?.name || "Your library"}</span>
+              <h1>My List</h1>
+              <p className="text-zinc-400 text-[13px] mt-2 [&>span]:px-2 [&>span]:text-zinc-600">{items.length} titles <span>/</span> {items.filter((item) => item.status === "Watching").length} watching <span>/</span> {items.filter((item) => item.favourite).length} favourites</p>
             </div>
+            {mediaFilter !== "actors" && <label className="flex items-center gap-3 border border-white/20 px-3.5 py-3 rounded-md text-zinc-400 w-full sm:w-[300px] max-w-full focus-within:border-rose-400 [&>input]:bg-transparent [&>input]:w-full [&>input]:min-w-0 [&>input]:outline-none [&>input]:text-white [&>input]:text-[13px]"><FiSearch aria-hidden="true" /><input aria-label="Search My List" placeholder="Search your titles" value={searchText} onChange={(event) => setSearchText(event.target.value)} />{searchText && <button type="button" aria-label="Clear search" onClick={() => setSearchText("")}><IoIosClose size={20} /></button>}</label>}
           </div>
 
           {/* MEDIA FILTER */}
-          <div className="flex items-center justify-center gap-2 mt-4">
+          <div className="flex gap-6 mt-[30px] [&>button]:!rounded-none [&>button]:!bg-transparent [&>button]:!shadow-none [&>button]:!px-0 [&>button]:!py-3.5 [&>button]:border-b-2 [&>button]:border-transparent [&>button]:min-w-[48px] [&>button]:text-zinc-400 [&>button[aria-pressed=true]]:!text-white [&>button[aria-pressed=true]]:border-rose-500" role="group" aria-label="Media type">
             {["all", "movie", "tv", "actors"].map((t) => (
               <motion.button
                 whileTap={{ scale: 0.95 }}
                 key={t}
+                aria-pressed={mediaFilter === t}
                 onClick={() => setMediaFilter(t)}
                 className={`px-4 py-1.5 rounded-full text-sm ${
                   mediaFilter === t
@@ -3157,8 +3140,8 @@ const Account = () => {
 
         {/* STATUS FILTER */}
         {mediaFilter !== "actors" && (
-          <div className="flex flex-col items-center justify-center px-6 py-3 border-b border-white/10 gap-2 overflow-x-auto">
-            <div className="flex items-center justify-center">
+          <div className="flex items-center gap-3 sm:gap-3.5 p-4 sm:px-7 sm:py-5 border-b border-white/10 flex-wrap shrink-0 [&>button]:!w-[34px] [&>button]:!h-[34px] [&>button]:!p-2 [&>button]:!border [&>button]:!border-white/20 [&>button]:!rounded-md">
+            <div className="flex flex-wrap gap-1 items-center flex-1 max-sm:basis-full [&>span]:hidden [&>button]:!rounded-md [&>button]:!text-xs [&>button]:whitespace-nowrap [&>button]:min-h-[34px]" role="group" aria-label="Watch status">
               <span
                 className="
                   px-2.5 py-1 rounded-full
@@ -3171,6 +3154,7 @@ const Account = () => {
               <motion.button
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setStatusFilter("all")}
+                aria-pressed={statusFilter === "all"}
                 className={`px-3 py-1.5 rounded-full text-sm ${
                   statusFilter === "all"
                     ? "bg-white text-black"
@@ -3184,6 +3168,7 @@ const Account = () => {
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   key={s.key}
+                  aria-pressed={statusFilter === s.key}
                   onClick={() => setStatusFilter(s.key)}
                   className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-2 ${
                     statusFilter === s.key
@@ -3196,39 +3181,10 @@ const Account = () => {
                 </motion.button>
               ))}
             </div>
-            <div className="flex items-center justify-center">
-              <span
-                className="
-                    px-2.5 py-1 rounded-full
-                    text-[10px] uppercase tracking-wider
-                    bg-white/5 text-white/50
-                  "
-              >
-                Sort
-              </span>
-              {[
-                { key: "recent", label: "Recent" },
-                { key: "highest_rated", label: "Highest Rated" },
-                { key: "favourites", label: "Favourites" },
-                { key: "title_az", label: "Title A-Z" },
-              ].map((opt) => (
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  key={opt.key}
-                  onClick={() => setSortFilter(opt.key)}
-                  className={`px-3 py-1.5 rounded-full text-sm ${
-                    sortFilter === opt.key
-                      ? "bg-red-500 text-white"
-                      : "bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  {opt.label}
-                </motion.button>
-              ))}
-            </div>
+            <label className="flex items-center gap-2.5 text-zinc-400 text-xs [&>select]:bg-[#1c1c21] [&>select]:border [&>select]:border-white/20 [&>select]:rounded-md [&>select]:text-zinc-100 [&>select]:px-2.5 [&>select]:py-2 [&>select]:max-w-[180px]">Sort<select value={sortFilter} onChange={(event) => setSortFilter(event.target.value)}><option value="recent">Recently updated</option><option value="highest_rated">Highest rated</option><option value="favourites">Favourites first</option><option value="title_az">Title A-Z</option></select></label>
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={clearFilters}
+              onClick={() => { clearFilters(); setSearchText(""); }}
               className="
               px-3 py-1.5 rounded-full text-sm
               border-2 border-red-600
@@ -3239,13 +3195,13 @@ const Account = () => {
               "
               title="Reset filters"
             >
-              Reset Saved Preferences
+              <FiRefreshCw aria-label="Reset filters" />
             </motion.button>
           </div>
         )}
 
         {/* SCROLLABLE CONTENT */}
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        <main className="flex-1 shrink-0 overflow-visible px-4 sm:px-6 py-6 [&_section>div.rounded-xl]:!bg-transparent [&_section>div.rounded-xl]:!border-0 [&_section>div.rounded-xl]:!p-0">
           <AnimatePresence mode="wait">
             {loading ? (
               <motion.div

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { MdChevronLeft, MdChevronRight } from "react-icons/md";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { deleteDoc, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import toast from "react-hot-toast";
 import PosterCard from "./PosterCard";
@@ -89,11 +89,15 @@ const ContentRow = ({
   const { user } = UserAuth();
   const { selectedProfile } = useProfile();
   const sliderRef = useRef(null);
+  const requestRef = useRef(false);
+  const generationRef = useRef(0);
+  const reducedMotion = useReducedMotion();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showLoadMore, setShowLoadMore] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [localStatusMap, setLocalStatusMap] = useState({});
   const [localFavouriteMap, setLocalFavouriteMap] = useState({});
   const [pendingRemove, setPendingRemove] = useState(null);
@@ -102,12 +106,14 @@ const ContentRow = ({
   const fetchPage = useCallback(
     async (targetPage, append = false) => {
       if (!fetchURL) return;
+      const generation = generationRef.current;
       const res = await axios.get(buildPagedUrl(fetchURL, targetPage));
+      if (generation !== generationRef.current) return;
       const nextResults = filterResultsForCategory(
         res.data.results || [],
         fetchURL,
       );
-      setTotalPages(res.data.total_pages || 1);
+      setTotalPages(Math.min(res.data.total_pages || 1, 500));
       setPage(targetPage);
       setItems((prev) => {
         if (!append) return nextResults;
@@ -119,6 +125,10 @@ const ContentRow = ({
   );
 
   useEffect(() => {
+    generationRef.current += 1;
+    requestRef.current = false;
+    setLoadingMore(false);
+    setLoadFailed(false);
     if (Array.isArray(seedItems)) {
       setItems(seedItems);
       setTotalPages(1);
@@ -129,6 +139,9 @@ const ContentRow = ({
 
     if (!fetchURL) return;
     let cancelled = false;
+    setItems([]);
+    setPage(1);
+    setTotalPages(1);
     setShowLoadMore(false);
 
     const loadInitial = async () => {
@@ -145,11 +158,12 @@ const ContentRow = ({
 
         while (targetPage <= maxPages) {
           const res = await axios.get(buildPagedUrl(fetchURL, targetPage));
+          if (cancelled) return;
           const filtered = filterResultsForCategory(
             res.data.results || [],
             fetchURL,
           );
-          maxPages = res.data.total_pages || 1;
+          maxPages = Math.min(res.data.total_pages || 1, 500);
           collected = mergeUniqueById([...collected, ...filtered]);
 
           if (collected.length >= minInitialItems || targetPage >= maxPages) {
@@ -173,6 +187,7 @@ const ContentRow = ({
     loadInitial();
     return () => {
       cancelled = true;
+      generationRef.current += 1;
     };
   }, [fetchPage, fetchURL, seedItems]);
 
@@ -181,8 +196,9 @@ const ContentRow = ({
     if (!el) return undefined;
 
     const updateLoadMoreVisibility = () => {
-      const reachedEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 16;
+      const reachedEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 260;
       setShowLoadMore(reachedEnd);
+      if (!reachedEnd) setLoadFailed(false);
     };
 
     updateLoadMoreVisibility();
@@ -192,7 +208,24 @@ const ContentRow = ({
       el.removeEventListener("scroll", updateLoadMoreVisibility);
       window.removeEventListener("resize", updateLoadMoreVisibility);
     };
-  }, [items.length]);
+  }, [items.length, page]);
+
+  useEffect(() => {
+    if (!showLoadMore || loadFailed || !fetchURL || Array.isArray(seedItems) || page >= totalPages || requestRef.current) return;
+    const slider = sliderRef.current;
+    if (!slider || slider.scrollLeft + slider.clientWidth < slider.scrollWidth - 260) return;
+    const generation = generationRef.current;
+    requestRef.current = true;
+    setLoadingMore(true);
+    fetchPage(page + 1, true).catch(() => {
+      if (generation === generationRef.current) setLoadFailed(true);
+    }).finally(() => {
+      if (generation === generationRef.current) {
+        requestRef.current = false;
+        setLoadingMore(false);
+      }
+    });
+  }, [showLoadMore, loadFailed, fetchURL, seedItems, page, totalPages, fetchPage, loadingMore]);
 
   /** 🔥 MERGE TMDB + FIREBASE */
   const mergedItems = useMemo(() => {
@@ -244,19 +277,6 @@ const ContentRow = ({
 
   const slideRight = () => {
     sliderRef.current?.scrollBy({ left: 600, behavior: "smooth" });
-  };
-
-  const handleLoadMore = async () => {
-    if (loadingMore) return;
-    if (page >= totalPages) return;
-    setLoadingMore(true);
-    try {
-      await fetchPage(page + 1, true);
-    } catch {
-      toast.error("Failed to load more");
-    } finally {
-      setLoadingMore(false);
-    }
   };
 
   const handleStatusChange = async (item, status) => {
@@ -435,24 +455,8 @@ const ContentRow = ({
         <h2 className="text-lg font-medium text-white flex-1 min-w-0 truncate pr-3">
           {title}
         </h2>
-        {showLoadMore && page < totalPages && (
-          <button
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className="
-              shrink-0
-              px-4 py-2 rounded-full text-sm font-medium
-              bg-white/15 hover:bg-white/25
-              border border-white/20
-              shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:shadow-[0_0_18px_rgba(255,255,255,0.18)]
-              animate-pulse
-              disabled:opacity-60 disabled:cursor-not-allowed
-              transition
-            "
-          >
-            {loadingMore ? "Loading..." : "Load more"}
-          </button>
-        )}
+        {loadingMore && <span role="status" aria-label="Loading titles" className="h-4 w-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />}
+        {loadFailed && <button type="button" onClick={() => setLoadFailed(false)} className="text-xs text-white/60 hover:text-white">Retry</button>}
       </div>
 
       <motion.div
@@ -482,9 +486,10 @@ const ContentRow = ({
           {mergedItems.map((item, index) => (
             <motion.div
               key={item.id}
-              initial={{ opacity: 0, y: 12 }}
+              className="shrink-0"
+              initial={{ opacity: 0, y: reducedMotion ? 0 : 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: index * 0.03 }}
+              transition={{ duration: reducedMotion ? 0 : 0.35, delay: reducedMotion ? 0 : (index % 20) * 0.015 }}
             >
               <PosterCard
                 item={item}

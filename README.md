@@ -1,6 +1,6 @@
-# AlphaX
+# ScenearyX
 
-AlphaX is a Netflix-style streaming tracker + IMDB-style discovery app built with React, Firebase, TMDB, and Framer Motion.
+ScenearyX is a Netflix-style streaming tracker + IMDB-style discovery app built with React, Firebase, TMDB, and Framer Motion.
 
 This repository is a **clone/evolution of my original Netflix Clone project**, expanded with profile-based personalization, ratings, actor workflows, and richer watchlist tools.
 

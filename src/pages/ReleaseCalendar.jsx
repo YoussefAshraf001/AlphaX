@@ -1,21 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   MdArrowForward,
   MdCheckCircle,
   MdChevronLeft,
   MdChevronRight,
   MdSchedule,
+  MdVisibility,
+  MdVisibilityOff,
 } from "react-icons/md";
 import {
   collection,
   doc,
   onSnapshot,
-  orderBy,
   query,
+  orderBy,
+  where,
   serverTimestamp,
   setDoc,
-  where,
+  updateDoc,
 } from "firebase/firestore";
 import { AnimatePresence, motion } from "framer-motion";
 import { db } from "../firebase";
@@ -266,9 +269,13 @@ const DayPosterGrid = ({ releases }) => {
 const ReleaseCalendar = () => {
   const { user } = UserAuth();
   const { selectedProfile, profileLoading } = useProfile();
-  const navigate = useNavigate();
   const [monthDate, setMonthDate] = useState(startOfMonth(new Date()));
   const [upcoming, setUpcoming] = useState([]);
+  const [ignoredItems, setIgnoredItems] = useState([]);
+  const [ignoreTarget, setIgnoreTarget] = useState(null);
+  const [savingIgnore, setSavingIgnore] = useState(false);
+  const [ignoreError, setIgnoreError] = useState("");
+  const ignoreDialogRef = useRef(null);
   const [savedShows, setSavedShows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshingShows, setRefreshingShows] = useState(false);
@@ -284,6 +291,11 @@ const ReleaseCalendar = () => {
   const activeProfileId = resolveProfileId(selectedProfile);
 
   useEffect(() => {
+    setUpcoming([]);
+    setIgnoredItems([]);
+    setSavedShows([]);
+    setIgnoreTarget(null);
+    setIgnoreError("");
     if (profileLoading) return;
     if (!user?.email) {
       setUpcoming([]);
@@ -292,7 +304,6 @@ const ReleaseCalendar = () => {
     }
 
     setLoading(true);
-    const currentYearStart = `${fetchedFromYear}-01-01`;
     const moviesRef = collection(
       db,
       ...profileSavedCollectionPath(user.email, activeProfileId, "movies"),
@@ -303,20 +314,32 @@ const ReleaseCalendar = () => {
     );
     const moviesQuery = query(
       moviesRef,
-      where("releaseDate", ">=", currentYearStart),
+      where("releaseDate", ">=", `${fetchedFromYear}-01-01`),
       orderBy("releaseDate", "asc"),
     );
-    const showsQuery = query(showsRef, orderBy("releaseDate", "asc"));
+    const showsQuery = query(showsRef);
 
     let movies = [];
+    let ignoredMovies = [];
+    let ignoredMoviesLoaded = false;
     let shows = [];
     let moviesLoaded = false;
     let showsLoaded = false;
 
     const sync = () => {
-      if (!moviesLoaded || !showsLoaded) return;
+      if (!moviesLoaded || !showsLoaded || !ignoredMoviesLoaded) return;
+
+      setIgnoredItems(
+        [...ignoredMovies, ...shows]
+          .filter((item) => item.calendarIgnored)
+          .map(normalizeReleaseItem)
+          .sort((a, b) =>
+            (a.title || a.name || "").localeCompare(b.title || b.name || ""),
+          ),
+      );
 
       const merged = [...movies, ...shows]
+        .filter((item) => !item.calendarIgnored)
         .map(normalizeReleaseItem)
         .filter((item) => item.releaseDate)
         .filter((item) => {
@@ -343,6 +366,7 @@ const ReleaseCalendar = () => {
       (snap) => {
         movies = snap.docs.map((d) => ({
           ...d.data(),
+          savedDocId: d.id,
           id: d.data().id ?? Number(d.id),
           mediaType: "movie",
         }));
@@ -361,6 +385,7 @@ const ReleaseCalendar = () => {
       (snap) => {
         shows = snap.docs.map((d) => ({
           ...d.data(),
+          savedDocId: d.id,
           id: d.data().id ?? Number(d.id),
           mediaType: "tv",
         }));
@@ -376,11 +401,61 @@ const ReleaseCalendar = () => {
       },
     );
 
+    const unsubIgnoredMovies = onSnapshot(
+      query(moviesRef, where("calendarIgnored", "==", true)),
+      (snap) => {
+        ignoredMovies = snap.docs.map((d) => ({
+          ...d.data(),
+          savedDocId: d.id,
+          id: d.data().id ?? Number(d.id),
+          mediaType: "movie",
+        }));
+        ignoredMoviesLoaded = true;
+        sync();
+      },
+      () => {
+        ignoredMoviesLoaded = true;
+        setIgnoreError("Could not load ignored movies. Reload to try again.");
+        sync();
+      },
+    );
+
     return () => {
+      unsubIgnoredMovies();
       unsubMovies();
       unsubShows();
     };
   }, [user?.email, activeProfileId, profileLoading, fetchedFromYear]);
+
+  useEffect(() => {
+    if (ignoreTarget) ignoreDialogRef.current?.showModal();
+    else ignoreDialogRef.current?.close();
+  }, [ignoreTarget]);
+
+  const saveIgnoredState = async () => {
+    if (!ignoreTarget || !user?.email || savingIgnore) return;
+    setSavingIgnore(true);
+    setIgnoreError("");
+    try {
+      await updateDoc(
+        doc(
+          db,
+          ...profileSavedCollectionPath(
+            user.email,
+            activeProfileId,
+            ignoreTarget.mediaType === "tv" ? "shows" : "movies",
+          ),
+          ignoreTarget.savedDocId || String(ignoreTarget.id),
+        ),
+        { calendarIgnored: !ignoreTarget.calendarIgnored },
+      );
+      setIgnoreTarget(null);
+    } catch {
+      setIgnoreError("Could not update this title. Please try again.");
+    } finally {
+      setSavingIgnore(false);
+    }
+  };
 
   const releasesByDate = useMemo(() => {
     const map = new Map();
@@ -432,6 +507,7 @@ const ReleaseCalendar = () => {
 
   const monthDayCount = monthReleaseDates.size;
   const countdownItems = useMemo(() => {
+    if (countdownScope === "ignored") return ignoredItems;
     if (countdownScope === "all") {
       return upcoming
         .filter((item) => {
@@ -449,7 +525,7 @@ const ReleaseCalendar = () => {
         return dt && dt.getFullYear() === y && dt.getMonth() === m;
       })
       .sort(compareReleaseStatus);
-  }, [upcoming, countdownScope, monthDate, fetchedFromYear]);
+  }, [upcoming, ignoredItems, countdownScope, monthDate, fetchedFromYear]);
   const visibleCountdownItems = useMemo(
     () => countdownItems.slice(0, visibleCount),
     [countdownItems, visibleCount],
@@ -506,9 +582,7 @@ const ReleaseCalendar = () => {
 
     if (!targetShows.length) {
       setRefreshMessage(
-        mode === "all"
-          ? "Already up to date."
-          : "Nothing to refresh.",
+        mode === "all" ? "Already up to date." : "Nothing to refresh.",
       );
       return;
     }
@@ -558,9 +632,7 @@ const ReleaseCalendar = () => {
       }
 
       setRefreshMessage(
-        updatedCount > 0
-          ? `${updatedCount} updated`
-          : "No updates",
+        updatedCount > 0 ? `${updatedCount} updated` : "No updates",
       );
     } finally {
       setRefreshingShows(false);
@@ -603,18 +675,16 @@ const ReleaseCalendar = () => {
           <PosterThumb posterPath={item.poster} className="w-12 h-16" />
 
           <div className="min-w-0 flex-1">
-            <button
-              onClick={() =>
-                navigate(
-                  item.mediaType === "tv"
-                    ? `/shows/${item.id}`
-                    : `/movies/${item.id}`,
-                )
+            <Link
+              to={
+                item.mediaType === "tv"
+                  ? `/shows/${item.id}`
+                  : `/movies/${item.id}`
               }
               className="text-sm sm:text-[15px] font-semibold leading-tight text-left hover:text-red-400 block w-full truncate"
             >
               {item.title || item.name}
-            </button>
+            </Link>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-wide text-white/45">
               <span>{releaseMetaLabel}</span>
               <span className="text-white/25">•</span>
@@ -634,13 +704,41 @@ const ReleaseCalendar = () => {
                 </span>
               )}
 
+              {!item.calendarIgnored && (
+                <button
+                  onClick={() => {
+                    jumpToReleaseDate(item.releaseDate);
+                    setModalDate(null);
+                  }}
+                  title="Jump to release date"
+                  className="h-8 sm:h-7 w-full sm:w-auto px-2.5 rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/[0.1] text-[11px] uppercase tracking-wide text-white/80 inline-flex items-center justify-center gap-1.5"
+                >
+                  View
+                  <MdArrowForward size={14} />
+                </button>
+              )}
               <button
-                onClick={() => jumpToReleaseDate(item.releaseDate)}
-                title="Jump to release date"
-                className="h-8 sm:h-7 w-full sm:w-auto px-2.5 rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/[0.1] text-[11px] uppercase tracking-wide text-white/80 inline-flex items-center justify-center gap-1.5"
+                type="button"
+                onClick={() => {
+                  setIgnoreError("");
+                  setIgnoreTarget(item);
+                }}
+                aria-label={
+                  (item.calendarIgnored ? "Restore " : "Ignore ") +
+                  (item.title || item.name)
+                }
+                title={
+                  item.calendarIgnored
+                    ? "Restore to calendar"
+                    : "Ignore from calendar"
+                }
+                className="h-8 w-8 shrink-0 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 inline-flex items-center justify-center text-white/70 hover:text-white"
               >
-                View
-                <MdArrowForward size={14} />
+                {item.calendarIgnored ? (
+                  <MdVisibility size={18} />
+                ) : (
+                  <MdVisibilityOff size={18} />
+                )}
               </button>
             </div>
           </div>
@@ -713,7 +811,7 @@ const ReleaseCalendar = () => {
                     disabled={refreshingShows || savedShows.length === 0}
                     className="h-7 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 text-[10px] uppercase tracking-wide text-red-100 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Refresh All Shows
+                    Refresh All Content
                   </button>
                 </div>
               </div>
@@ -805,7 +903,7 @@ const ReleaseCalendar = () => {
                         const hasRelease = dayReleases.length > 0;
                         const isSelected = selectedDate === key;
                         const count = dayReleases.length;
-                        const canOpenModal = count > 2;
+                        const canOpenModal = count > 0;
 
                         return (
                           <button
@@ -852,7 +950,7 @@ const ReleaseCalendar = () => {
               <h3 className="text-sm uppercase tracking-widest text-white/40">
                 Release Status
               </h3>
-              <div className="grid grid-cols-2 rounded-xl border border-white/15 bg-black/40 p-1 w-full sm:w-[220px]">
+              <div className="grid grid-cols-3 rounded-xl border border-white/15 bg-black/40 p-1 w-full sm:w-[280px]">
                 <button
                   type="button"
                   onClick={() => setCountdownScope("current")}
@@ -875,6 +973,13 @@ const ReleaseCalendar = () => {
                 >
                   All
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setCountdownScope("ignored")}
+                  className={`px-3 py-1.5 text-[11px] rounded-lg transition ${countdownScope === "ignored" ? "bg-red-600 text-white" : "text-white/70 hover:text-white hover:bg-white/10"}`}
+                >
+                  Ignored ({ignoredItems.length})
+                </button>
               </div>
             </div>
 
@@ -883,22 +988,41 @@ const ReleaseCalendar = () => {
                 Sign in to load your saved titles.
               </p>
             )}
+            {ignoreError && !ignoreTarget && (
+              <p role="alert" className="mb-3 text-sm text-red-300">
+                {ignoreError}
+              </p>
+            )}
             {loading && user && (
               <p className="text-sm text-white/50">Loading releases...</p>
             )}
-            {!loading && upcoming.length === 0 && (
-              <p className="text-sm text-white/50">
-                No titles with release dates found in your saved list.
-              </p>
-            )}
+            {!loading &&
+              countdownScope === "ignored" &&
+              ignoredItems.length === 0 && (
+                <p className="text-sm text-white/50">No ignored titles.</p>
+              )}
+            {!loading &&
+              countdownScope !== "ignored" &&
+              upcoming.length === 0 && (
+                <p className="text-sm text-white/50">
+                  No titles with release dates found in your saved list.
+                </p>
+              )}
 
-            {!loading && upcoming.length > 0 && countdownItems.length === 0 && (
-              <p className="text-sm text-white/50">No titles in this month.</p>
-            )}
+            {!loading &&
+              countdownScope !== "ignored" &&
+              upcoming.length > 0 &&
+              countdownItems.length === 0 && (
+                <p className="text-sm text-white/50">
+                  No titles in this month.
+                </p>
+              )}
 
             {!loading && countdownItems.length > 0 && (
               <div className="space-y-3 max-h-[58vh] lg:max-h-[640px] overflow-y-auto pr-5">
-                {countdownScope === "all" ? (
+                {countdownScope === "ignored" ? (
+                  visibleCountdownItems.map(renderStatusCard)
+                ) : countdownScope === "all" ? (
                   <>
                     <div className="pt-1">
                       <p className="text-[11px] uppercase tracking-widest text-white/45 mb-2">
@@ -971,6 +1095,62 @@ const ReleaseCalendar = () => {
         </div>
       </div>
 
+      <dialog
+        ref={ignoreDialogRef}
+        aria-labelledby="ignore-title"
+        aria-describedby="ignore-description"
+        onCancel={(event) => {
+          if (savingIgnore) event.preventDefault();
+          else setIgnoreTarget(null);
+        }}
+        className="w-[calc(100%-2rem)] max-w-md rounded-2xl border border-white/15 bg-[#101116] p-6 text-white shadow-2xl backdrop:bg-black/75"
+      >
+        <h3 id="ignore-title" className="text-xl font-semibold">
+          {ignoreTarget?.calendarIgnored
+            ? "Restore to calendar?"
+            : "Ignore this title?"}
+        </h3>
+        <p
+          id="ignore-description"
+          className="mt-3 text-sm leading-6 text-white/65"
+        >
+          <span className="font-semibold text-white">
+            {ignoreTarget?.title || ignoreTarget?.name}
+          </span>
+          {ignoreTarget?.calendarIgnored
+            ? " will appear on its release dates again."
+            : " will be removed from every calendar day, including future releases. You can restore it from the Ignored tab. It will stay in your saved list."}
+        </p>
+        {ignoreError && (
+          <p role="alert" className="mt-3 text-sm text-red-300">
+            {ignoreError}
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            autoFocus
+            disabled={savingIgnore}
+            onClick={() => setIgnoreTarget(null)}
+            className="rounded-lg border border-white/20 px-4 py-2 text-sm disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={savingIgnore}
+            onClick={saveIgnoredState}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm hover:bg-red-500 disabled:opacity-50"
+          >
+            {savingIgnore
+              ? "Saving..."
+              : ignoreTarget?.calendarIgnored
+                ? "Restore"
+                : "Ignore title"}
+          </button>
+        </div>
+      </dialog>
+
       <AnimatePresence>
         {refreshingShows && (
           <motion.div
@@ -1000,7 +1180,7 @@ const ReleaseCalendar = () => {
       </AnimatePresence>
 
       <AnimatePresence>
-        {modalDate && modalReleases.length > 2 && (
+        {modalDate && modalReleases.length > 0 && (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
             initial={{ opacity: 0 }}
@@ -1037,41 +1217,7 @@ const ReleaseCalendar = () => {
               </div>
 
               <div className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-                {modalReleases.map((item) => {
-                  const releaseMetaLabel = getReleaseMetaLabel(item);
-
-                  return (
-                    <button
-                      key={`${item.mediaType}-${item.id}`}
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          item.mediaType === "tv"
-                            ? `/shows/${item.id}`
-                            : `/movies/${item.id}`,
-                        )
-                      }
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left hover:bg-white/[0.06]"
-                    >
-                      <PosterThumb
-                        posterPath={item.poster}
-                        className="h-20 w-14"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-white">
-                          {item.title || item.name}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-wide text-white/45">
-                          <span>{releaseMetaLabel}</span>
-                          <span className="text-white/25">•</span>
-                          <span>
-                            {formatReleaseDateLabel(item.releaseDate)}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                {modalReleases.map(renderStatusCard)}
               </div>
             </motion.div>
           </motion.div>

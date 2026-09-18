@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { IoAdd } from "react-icons/io5";
 import { IoIosPause, IoIosClose } from "react-icons/io";
 import { FaHeart, FaPlay, FaRegHeart, FaTrash } from "react-icons/fa";
@@ -35,14 +35,13 @@ const normalizeStatus = (status) => {
    COMPONENT
 ========================= */
 const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
-  const navigate = useNavigate();
   const currentStatus = normalizeStatus(item.status);
   const isSaved = Boolean(item.isSaved || currentStatus);
   const isFavourite = Boolean(item.favourite);
   const isFavouriteLocked = Boolean(item.isUnreleased);
 
   const poster = item.poster_path || item.poster;
-  const isTV = !!item.first_air_date;
+  const isTV = item.mediaType === "tv" || item.media_type === "tv" || !!item.first_air_date;
 
   const year =
     item.releaseDate?.slice(0, 4) ||
@@ -52,23 +51,8 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
   const yearLabel = item.releaseDateLabel || year || (item.isUnreleased ? "TBA" : "");
   const detailPath = isTV ? `/shows/${item.id}` : `/movies/${item.id}`;
 
-  const handleOpenDetails = (event) => {
-    if (event.metaKey || event.ctrlKey || event.button === 1) {
-      window.open(detailPath, "_blank", "noopener,noreferrer");
-      return;
-    }
-    navigate(detailPath);
-  };
-
   return (
     <div
-      onClick={handleOpenDetails}
-      onAuxClick={(e) => {
-        if (e.button === 1) {
-          e.preventDefault();
-          handleOpenDetails(e);
-        }
-      }}
       className="
         group relative
         w-[210px] h-[320px]
@@ -77,6 +61,7 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
         cursor-pointer
       "
     >
+      <Link to={detailPath} aria-label={`Open ${item.title || item.name}`} className="absolute inset-0 z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-white" />
       {/* IMAGE (ZOOMS, NOT CARD) */}
       {poster ? (
         <img
@@ -116,7 +101,7 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
           leading-tight line-clamp-2
           transition-all duration-200
           group-hover:bottom-[85px]
-          z-20
+          z-20 pointer-events-none
         "
       >
         {item.title || item.name}
@@ -128,7 +113,7 @@ const PosterCard = ({ item, onStatusChange, onFavouriteToggle }) => {
           absolute left-3 right-3 bottom-16
           opacity-0 group-hover:opacity-100
           transition-opacity duration-200
-          z-20
+          z-20 pointer-events-none
         "
       >
         {yearLabel && <div className="text-xs text-white/70">{yearLabel}</div>}

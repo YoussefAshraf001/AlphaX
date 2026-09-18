@@ -21,6 +21,7 @@ import {
   resolveProfileId,
 } from "../utils/profileFirestorePaths";
 import { uploadImageToCloudinary } from "../utils/cloudinaryUpload";
+import { FiCamera, FiSave, FiLock, FiUsers } from "react-icons/fi";
 
 const createImage = (src) =>
   new Promise((resolve, reject) => {
@@ -272,12 +273,7 @@ const AccountSettings = () => {
   };
 
   return (
-    <div className="relative min-h-screen text-white bg-[#090909] overflow-hidden">
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/75 to-[#090909]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(239,68,68,0.2),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.08),transparent_35%)]" />
-      </div>
-
+    <div className="relative min-h-screen bg-[#101012] text-white tracking-normal [&_button]:!rounded-md [&_button]:inline-flex [&_button]:items-center [&_button]:justify-center [&_button]:gap-2 [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-rose-400 [&_button:focus-visible]:outline-offset-4 [&_input:focus-visible]:outline-rose-400">
       <div className="relative z-10 px-4 md:px-8 pt-24 pb-10">
         <div className="max-w-6xl mx-auto">
           <button
@@ -291,10 +287,11 @@ const AccountSettings = () => {
             Back
           </button>
 
-          <div className="rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-5 md:p-8 shadow-2xl">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-              <div className="lg:col-span-4">
-                <div className="w-full max-w-[320px] mx-auto">
+          <header className="pt-7 pb-9 border-b border-white/10 [&>span]:text-rose-400 [&>span]:text-[11px] [&>span]:font-semibold [&>h1]:text-[28px] sm:[&>h1]:text-4xl [&>h1]:font-bold [&>h1]:my-3 [&>h1]:break-words [&>p]:text-sm [&>p]:text-zinc-400 [&>p]:break-words"><span>YOUR ACCOUNT</span><h1>Account Settings</h1><p>{user?.email}</p></header>
+          <div className="w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-[240px_minmax(0,1fr)] gap-10 sm:gap-[72px] py-7 sm:py-10">
+              <aside className="text-center max-sm:max-w-[280px] max-sm:w-full max-sm:justify-self-center">
+                <div className="w-full">
                   <div className="relative">
                     <img
                       src={avatarPreview || NotFoundPlaceholder}
@@ -303,7 +300,7 @@ const AccountSettings = () => {
                         e.currentTarget.src = NotFoundPlaceholder;
                       }}
                       alt="Profile"
-                      className="w-full h-[340px] object-cover rounded-2xl border border-white/15 shadow-2xl"
+                      className="w-32 h-32 object-cover rounded-full mx-auto mb-6 border-[3px] border-white/10"
                     />
                   </div>
 
@@ -326,6 +323,7 @@ const AccountSettings = () => {
                     disabled={savingAvatar}
                     className="mt-4 w-full rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed text-white py-2.5 font-semibold transition inline-flex items-center justify-center gap-2"
                   >
+                    <FiCamera aria-hidden="true" />
                     {savingAvatar && (
                       <span className="loading loading-spinner loading-xs text-white" />
                     )}
@@ -335,25 +333,19 @@ const AccountSettings = () => {
                         : "Save GIF"
                       : "Upload New Avatar"}
                   </button>
-                  <p className="text-xs text-white/50 mt-2 text-center">
-                    Upload, crop, and save to your profile. GIFs are supported.
-                  </p>
+                  <h2 className="text-xl font-semibold mt-6 break-words">{selectedProfile?.displayName || selectedProfile?.name || "Main"}</h2>
+                  <span className="text-xs text-zinc-400">Active profile</span>
+                  <button type="button" className="mt-7 px-4 py-3 border border-white/20 text-[13px] w-full hover:bg-white/5" onClick={() => navigate("/profiles")}><FiUsers /> Manage profiles</button>
                 </div>
-              </div>
+              </aside>
 
-              <div className="lg:col-span-8 flex flex-col gap-5">
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-black tracking-tight">
-                    Account Settings
-                  </h1>
-                  <p className="text-white/60 mt-1">{user?.email}</p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-                  <p className="text-xs uppercase tracking-wider text-white/45 mb-2">
-                    Display Name
-                  </p>
+              <div className="min-w-0">
+                <section className="pb-8 mb-8 border-b border-white/10 [&>h2]:text-xl [&>h2]:font-semibold [&>h2]:mb-6 [&>label]:block [&>label]:text-zinc-400 [&>label]:text-[13px] [&>label]:mb-2.5 [&>input]:!rounded-md [&>input]:!bg-[#19191d] [&>input]:min-h-[46px]">
+                  <h2>Profile</h2>
+                  <label htmlFor="profile-display-name">Display name</label>
                   <input
+                    id="profile-display-name"
+                    maxLength={24}
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your display name"
@@ -365,26 +357,25 @@ const AccountSettings = () => {
                       disabled={savingName}
                       className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed transition text-sm font-semibold"
                     >
+                      <FiSave aria-hidden="true" />
                       {savingName ? "Saving..." : "Save Name"}
                     </button>
                   </div>
-                </div>
+                </section>
 
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-                  <p className="text-xs uppercase tracking-wider text-white/45 mb-2">
-                    Security
-                  </p>
-                  <p className="text-sm text-white/70 mb-3">
-                    Send a password reset email to your account.
-                  </p>
+                <section className="pb-8 mb-8 border-b border-white/10 [&>h2]:text-xl [&>h2]:font-semibold [&>h2]:mb-6 [&>label]:block [&>label]:text-zinc-400 [&>label]:text-[13px] [&>label]:mb-2.5 [&>input]:!rounded-md [&>input]:!bg-[#19191d] [&>input]:min-h-[46px]">
+                  <h2>Security</h2>
+                  <label>Email address</label>
+                  <p className="text-zinc-400 text-sm break-words mb-6">{user?.email}</p>
                   <button
                     onClick={resetPassword}
                     disabled={sendingReset}
                     className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed transition text-sm font-semibold"
                   >
+                    <FiLock aria-hidden="true" />
                     {sendingReset ? "Sending..." : "Reset Password"}
                   </button>
-                </div>
+                </section>
               </div>
             </div>
           </div>
