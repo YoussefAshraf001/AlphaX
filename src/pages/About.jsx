@@ -69,7 +69,7 @@ const About = () => {
           className="xl:col-span-8 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.02] backdrop-blur-xl p-6 md:p-10 shadow-[0_30px_120px_rgba(0,0,0,0.65)]"
         >
           <p className="text-xs uppercase tracking-[0.26em] text-white/55">
-            About ScenearyX
+            About SceneariX
           </p>
           <h1 className="mt-3 text-4xl md:text-6xl font-black tracking-tight leading-[0.95]">
             Built for people
@@ -79,7 +79,7 @@ const About = () => {
             what they watch.
           </h1>
           <p className="mt-5 max-w-3xl text-sm md:text-base text-white/75 leading-relaxed">
-            ScenearyX combines discovery, detail, and progress into one product
+            SceneariX combines discovery, detail, and progress into one product
             flow. Browse, save, plan, and continue watching without jumping
             between apps or losing track of what comes next.
           </p>
@@ -136,7 +136,7 @@ const About = () => {
               </motion.div>
               <div>
                 <h2 className="text-lg font-semibold">Developer & Designer</h2>
-                <p className="text-xs text-white/60">Creator of ScenearyX</p>
+                <p className="text-xs text-white/60">Creator of SceneariX</p>
               </div>
             </div>
             <p className="mt-4 text-sm text-white/75 leading-relaxed">
@@ -168,7 +168,7 @@ const About = () => {
         >
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <h3 className="text-2xl md:text-3xl font-bold tracking-tight">
-              What ScenearyX Provides
+              What SceneariX Provides
             </h3>
             <p className="text-xs uppercase tracking-[0.18em] text-white/50">
               TMDB Powered Data

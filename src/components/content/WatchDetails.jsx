@@ -27,7 +27,7 @@ export default function WatchDetails({
   const [resumeRestored, setResumeRestored] = useState(false);
   const [episodeSelectionReady, setEpisodeSelectionReady] = useState(false);
   const reducedMotion = useReducedMotion();
-  const [tab, setTab] = useState("watch");
+  const [tab, setTab] = useState(() => (resumeRequested ? "watch" : "details"));
   const seasons = (media.seasons || []).filter(
     (item) => item.episode_count > 0,
   );
@@ -234,23 +234,23 @@ export default function WatchDetails({
   }
 
   return (
-    <div className="bg-[#0c0c0e] -mt-2 -mx-4 -mb-12 px-4 md:px-[4vw] pt-5 pb-16 min-h-[90vh] tracking-normal [&_h1]:!tracking-normal [&_h2]:!tracking-normal [&_p]:break-words [&_span]:break-words">
-      <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between gap-4">
+    <div className="relative -mt-2 -mx-4 md:-mx-8 -mb-12 min-h-[calc(100vh-5.5rem)] overflow-hidden border-y border-white/10 bg-[#090909]/80 px-4 pt-5 pb-16 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-2xl backdrop-saturate-150 md:px-[4vw] tracking-normal [&_h1]:!tracking-normal [&_h2]:!tracking-normal [&_p]:break-words [&_span]:break-words">
+      <div className="relative z-20 max-w-[1400px] mx-auto mb-5 flex items-center justify-between gap-4">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-sm text-white/70 hover:text-white"
+          className="flex h-10 items-center gap-2 rounded-full border border-white/10 bg-black/45 px-4 text-sm font-medium text-white/80 shadow-lg backdrop-blur-xl transition hover:bg-white/15 hover:text-white"
         >
           <FaArrowLeft /> Back
         </button>
         <div
           role="tablist"
           aria-label="Title view"
-          className="relative grid grid-cols-2 gap-2 p-1 bg-[#1c1c20] border border-white/10 rounded-lg [&>button]:relative [&>button]:z-[1] [&>button]:!bg-transparent [&>button]:!rounded-md [&>button]:!text-[13px] [&>button]:!px-5 [&>button]:!py-[9px] [&>button]:min-w-[96px] [&>button[aria-selected=true]]:!text-white"
+          className="relative grid grid-cols-2 gap-1 rounded-full border border-white/10 bg-black/55 p-1 shadow-xl backdrop-blur-xl [&>button]:relative [&>button]:z-[1] [&>button]:!bg-transparent [&>button]:!rounded-full [&>button]:!text-[13px] [&>button]:!px-5 [&>button]:!py-[9px] [&>button]:min-w-[96px] [&>button[aria-selected=true]]:!text-white"
         >
           <span
             aria-hidden="true"
-            className={`absolute top-1 bottom-1 left-1 w-[calc(50%-8px)] rounded-md bg-[#37373d] transition-transform duration-300 motion-reduce:transition-none ${tab === "details" ? "translate-x-[calc(100%+8px)]" : ""}`}
+            className={`absolute top-1 bottom-1 left-1 w-[calc(50%-6px)] rounded-full bg-white/20 shadow-inner transition-transform duration-300 motion-reduce:transition-none ${tab === "details" ? "translate-x-[calc(100%+4px)]" : ""}`}
           />
           {["watch", "details"].map((value) => (
             <button
@@ -709,20 +709,41 @@ export default function WatchDetails({
             role="tabpanel"
             aria-labelledby="details-tab"
           >
-            <div className="relative -mx-4 md:-mx-[4vw] h-[350px] md:h-[440px] overflow-hidden [&>img]:absolute [&>img]:w-full [&>img]:h-full [&>img]:object-cover [&>img]:object-[center_30%]">
+            <div className="relative -mx-4 -mt-[76px] h-[72vh] min-h-[560px] max-h-[820px] overflow-hidden md:-mx-[4vw] md:-mt-[76px] [&>img]:absolute [&>img]:h-full [&>img]:w-full [&>img]:scale-[1.02] [&>img]:object-cover [&>img]:object-[center_25%]">
               {media.backdrop_path && (
                 <img
                   src={`https://image.tmdb.org/t/p/original${media.backdrop_path}`}
                   alt=""
                 />
               )}
-              <div className="absolute inset-0 bg-[linear-gradient(0deg,#0c0c0e_0%,#0c0c0e33_70%),linear-gradient(90deg,#0c0c0ec9,transparent_75%)]" />
-              <div className="absolute left-4 md:left-[max(4vw,calc((100%_-_1280px)/2))] bottom-9 md:bottom-12 w-[760px] max-w-[calc(100%-32px)] md:max-w-[85%] [&>h1]:text-[32px] md:[&>h1]:text-5xl [&>h1]:font-bold [&>h1]:leading-tight [&>h1]:mt-3 [&>h1]:mb-[18px] [&>p]:text-sm [&>p]:text-zinc-300 [&>button]:inline-flex [&>button]:items-center [&>button]:gap-3.5 [&>button]:bg-zinc-100 [&>button]:text-zinc-900 [&>button]:font-bold [&>button]:rounded-md [&>button]:py-3 [&>button]:px-[26px] [&>button]:mt-6 [&>button]:text-sm">
-                <span className="text-[11px] font-bold text-zinc-400">
-                  {type === "tv" ? "SERIES" : "FILM"}
-                </span>
+              <div className="absolute inset-0 bg-[linear-gradient(0deg,#090909_0%,rgba(9,9,9,0.72)_15%,transparent_52%),linear-gradient(90deg,rgba(0,0,0,0.92)_0%,rgba(0,0,0,0.56)_42%,transparent_76%),linear-gradient(180deg,rgba(0,0,0,0.55)_0%,transparent_28%)]" />
+              <div className="absolute bottom-16 left-4 w-[680px] max-w-[calc(100%-32px)] md:bottom-24 md:left-[max(4vw,calc((100%_-_1400px)/2))] [&>h1]:mb-4 [&>h1]:mt-3 [&>h1]:max-w-[650px] [&>h1]:text-4xl [&>h1]:font-black [&>h1]:leading-[0.98] [&>h1]:drop-shadow-2xl md:[&>h1]:text-6xl lg:[&>h1]:text-7xl [&>button]:inline-flex [&>button]:items-center [&>button]:gap-3 [&>button]:rounded-md [&>button]:bg-white [&>button]:px-7 [&>button]:py-3 [&>button]:text-base [&>button]:font-bold [&>button]:text-black [&>button]:shadow-xl [&>button]:transition [&>button:hover]:bg-white/80">
+                <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-300">
+                  <span className="text-red-500">SceneariX</span>
+                  <span>{type === "tv" ? "Series" : "Film"}</span>
+                </div>
                 <h1>{title}</h1>
-                <p>
+                <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold">
+                  {media.vote_average > 0 && (
+                    <span className="text-emerald-400">
+                      {Math.round(media.vote_average * 10)}% Match
+                    </span>
+                  )}
+                  <span>{date?.slice(0, 4)}</span>
+                  {type === "tv" && seasons.length > 0 && (
+                    <span>
+                      {seasons.length} season{seasons.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                  {type !== "tv" && media.runtime > 0 && (
+                    <span>{media.runtime} min</span>
+                  )}
+                </div>
+                <p className="max-w-xl text-sm leading-relaxed text-white/80 line-clamp-3 md:text-base">
+                  {media.overview ||
+                    "Discover the story, cast, and everything you need to know about this title."}
+                </p>
+                <p className="mt-3 text-xs text-white/60">
                   {[
                     date?.slice(0, 4),
                     type === "tv"
@@ -746,7 +767,7 @@ export default function WatchDetails({
                 </button>
               </div>
             </div>
-            <div className="max-w-[1280px] mx-auto relative [&>div]:!max-w-none [&>div>div]:!bg-transparent [&>div>div]:!border-0 [&>div>div]:!rounded-none [&>div>div]:!shadow-none [&>div>div]:!backdrop-filter-none [&>div>div]:!px-0 [&>div>div]:!py-7 [&>div>div:first-child]:!pt-0 [&>div>div:first-child>div:first-child]:hidden [&_h1]:!text-2xl md:[&_h1]:!text-[28px] [&_h2]:!text-[22px] [&_p]:!leading-relaxed [&_.rounded-3xl]:!rounded-lg [&_.rounded-2xl]:!rounded-lg [&_.rounded-xl]:!rounded-lg [&_.rounded-full]:!rounded-md [&_.grid>.rounded-xl]:!bg-transparent [&_.grid>.rounded-xl]:!border-0 [&_.grid>.rounded-xl]:!border-l [&_.grid>.rounded-xl]:!border-white/10">
+            <div className="relative z-10 -mt-10 max-w-[1400px] mx-auto pb-8 [&>div]:!max-w-none [&>div>div]:!border-white/10 [&>div>div]:!bg-[#181818]/80 [&>div>div]:!shadow-[0_24px_80px_rgba(0,0,0,0.35)] [&>div>div]:!backdrop-blur-xl [&>div>div]:!rounded-2xl [&>div>div:first-child]:!p-5 md:[&>div>div:first-child]:!p-8 [&>div>div:first-child>div:first-child]:hidden [&_h1]:!text-2xl md:[&_h1]:!text-[28px] [&_h2]:!text-[22px] [&_p]:!leading-relaxed [&_.rounded-3xl]:!rounded-xl [&_.rounded-2xl]:!rounded-xl [&_.rounded-full]:!rounded-md [&_.grid>.rounded-xl]:!bg-black/20">
               {children}
             </div>
           </section>

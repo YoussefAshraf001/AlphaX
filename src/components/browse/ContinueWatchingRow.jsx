@@ -341,15 +341,6 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
                     Resume
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => removeFromContinueWatching(item)}
-                    title="Remove from Continue Watching"
-                    aria-label={`Remove ${item.title || item.name} from Continue Watching`}
-                    className="absolute top-2 right-2 z-10 grid place-items-center w-8 h-8 rounded-full bg-black/70 text-white/80 hover:bg-red-600 hover:text-white md:opacity-0 group-hover/card:opacity-100 group-focus-within/card:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white transition-opacity motion-reduce:transition-none"
-                  >
-                    <MdClose size={19} />
-                  </button>
                 </div>
 
                 {/* TEXT */}
@@ -371,6 +362,15 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
                   />
                 </div>
               </Link>
+              <button
+                type="button"
+                onClick={() => removeFromContinueWatching(item)}
+                title="Remove from Continue Watching"
+                aria-label={`Remove ${item.title || item.name} from Continue Watching`}
+                className="absolute top-2 right-2 z-10 grid place-items-center w-8 h-8 rounded-full bg-black/70 text-white/80 hover:bg-red-600 hover:text-white md:opacity-0 group-hover/card:opacity-100 group-focus-within/card:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white transition-opacity motion-reduce:transition-none"
+              >
+                <MdClose size={19} />
+              </button>
             </div>
           );
         })}

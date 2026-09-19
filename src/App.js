@@ -46,7 +46,7 @@ function App() {
     normalizedPath === "/signup";
 
   useEffect(() => {
-    const TITLE_PREFIX = "ScenearyX";
+    const TITLE_PREFIX = "SceneariX";
     const titleByPath = {
       "/": "Home",
       "/for-you": "For You",

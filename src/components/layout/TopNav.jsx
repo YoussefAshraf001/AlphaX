@@ -284,7 +284,7 @@ const TopNav = () => {
           {/* LEFT */}
           <div className="flex items-center gap-8">
             <Link to="/" className="text-red-600 font-bold text-2xl">
-              SCENEARYX
+              SCENEARIX
             </Link>
 
             {/* NAV (md+) */}
@@ -678,7 +678,7 @@ const TopNav = () => {
                       <div>
                         <p className="text-sm text-white font-medium">Menu</p>
                         <p className="text-[11px] uppercase tracking-wide text-white/50">
-                          Explore SCENEARYX
+                          Explore SCENEARIX
                         </p>
                       </div>
                     )}
