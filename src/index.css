@@ -2,9 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
 body {
   background-color: black;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: inherit;
+}
+
+button,
+input,
+textarea,
+select,
+option,
+dialog {
+  font: inherit;
+}
+
+.app-logo-font {
+  font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* width */

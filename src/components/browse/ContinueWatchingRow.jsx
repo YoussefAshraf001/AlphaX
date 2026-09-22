@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   collection,
   doc,
-  query,
-  where,
   onSnapshot,
   setDoc,
 } from "firebase/firestore";
@@ -55,9 +53,6 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
       ...profileSavedCollectionPath(user.email, activeProfileId, "shows"),
     );
 
-    const qMovies = query(movieRef, where("status", "==", "Watching"));
-    const qShows = query(showRef, where("status", "==", "Watching"));
-
     const shouldIncludeMovies =
       mediaFilter === "all" || mediaFilter === "movie";
     const shouldIncludeShows = mediaFilter === "all" || mediaFilter === "tv";
@@ -98,7 +93,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
 
     const unsubMovies = shouldIncludeMovies
       ? onSnapshot(
-          qMovies,
+          movieRef,
           (snap) => {
             movies = snap.docs.map((d) => ({
               id: d.id,
@@ -119,7 +114,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
 
     const unsubShows = shouldIncludeShows
       ? onSnapshot(
-          qShows,
+          showRef,
           (snap) => {
             shows = snap.docs.map((d) => ({
               id: d.id,
@@ -176,7 +171,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
           id: item.id,
           title: item.title || item.name || "Untitled",
           mediaType: item.mediaType,
-          status: "Watching",
+          status: item.status || "Watching",
           continueWatchingHiddenAtMs: Date.now(),
         },
         { merge: true },

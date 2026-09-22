@@ -5,18 +5,25 @@ export function playbackUpdate(previous = {}, sample) {
   const episodeProgress = { ...(previous.episodeProgress || {}) };
   const wasCompleted = Boolean(episodeProgress[key]?.completed);
   const preserveResume = previous.playback && ((sample.manual && (previous.playback.season !== sample.season || previous.playback.episode !== sample.episode)) || (sample.savedAt && previous.playback.updatedAtMs > sample.savedAt));
-  const completed = sample.completed ?? (wasCompleted || sample.event === "ended" || (duration > 0 && currentTime / duration >= 0.95));
+  const reachedEnd = sample.completed ?? (sample.event === "ended" || (duration > 0 && currentTime / duration >= 0.95));
+  // Completion is permanent for watch-history counts, while playback can still
+  // hold a fresh resume point when a finished title is being rewatched.
+  const completed = wasCompleted || reachedEnd;
   episodeProgress[key] = { currentTime, duration, completed, season: sample.season || 0, episode: sample.episode || 0, updatedAtMs: sample.savedAt || 0 };
   const completedCount = Object.values(episodeProgress).filter((item) => item.completed).length;
   return {
     episodeProgress,
     episodeProgressVersion: 1,
-    playback: preserveResume ? previous.playback : { ...episodeProgress[key], currentTime: completed ? 0 : currentTime },
+    playback: preserveResume ? previous.playback : { ...episodeProgress[key], completed: reachedEnd, currentTime: reachedEnd ? 0 : currentTime },
     watchedEpisodes: sample.type === "tv" ? Math.max(completedCount, (Number(previous.watchedEpisodes) || 0) + (completed && !wasCompleted ? 1 : !completed && wasCompleted ? -1 : 0)) : 0,
     watchTimeSeconds: Math.max(0, Number(previous.watchTimeSeconds) || 0) + Math.max(0, Number(sample.watchTimeSeconds) || 0),
     currentSeason: preserveResume ? previous.currentSeason || previous.playback.season || 0 : sample.season || 0,
     currentEpisode: preserveResume ? previous.currentEpisode || previous.playback.episode || 0 : sample.episode || 0,
-    status: sample.type === "movie" && completed ? "Finished" : "Watching",
+    status: previous.status === "Finished" || previous.status === "Watched"
+      ? "Finished"
+      : sample.type === "movie" && completed
+        ? "Finished"
+        : "Watching",
   };
 }
 

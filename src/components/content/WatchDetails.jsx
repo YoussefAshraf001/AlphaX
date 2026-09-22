@@ -234,8 +234,8 @@ export default function WatchDetails({
   }
 
   return (
-    <div className="relative -mt-2 -mx-4 md:-mx-8 -mb-12 min-h-[calc(100vh-5.5rem)] overflow-hidden border-y border-white/10 bg-[#090909]/80 px-4 pt-5 pb-16 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-2xl backdrop-saturate-150 md:px-[4vw] tracking-normal [&_h1]:!tracking-normal [&_h2]:!tracking-normal [&_p]:break-words [&_span]:break-words">
-      <div className="relative z-20 max-w-[1400px] mx-auto mb-5 flex items-center justify-between gap-4">
+    <div className={`relative -mt-2 -mx-4 md:-mx-8 -mb-12 min-h-[calc(100vh-5.5rem)] overflow-hidden bg-[#090909] tracking-normal [&_p]:break-words [&_span]:break-words ${tab === "watch" ? "border-y border-white/10 px-4 pt-5 pb-16 md:px-[4vw]" : "pt-0 pb-16"}`}>
+      <div className={`relative z-20 max-w-[1400px] mx-auto mb-5 items-center justify-between gap-4 ${tab === "watch" ? "flex" : "hidden"}`}>
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -709,7 +709,7 @@ export default function WatchDetails({
             role="tabpanel"
             aria-labelledby="details-tab"
           >
-            <div className="relative -mx-4 -mt-[76px] h-[72vh] min-h-[560px] max-h-[820px] overflow-hidden md:-mx-[4vw] md:-mt-[76px] [&>img]:absolute [&>img]:h-full [&>img]:w-full [&>img]:scale-[1.02] [&>img]:object-cover [&>img]:object-[center_25%]">
+            <div className="hidden">
               {media.backdrop_path && (
                 <img
                   src={`https://image.tmdb.org/t/p/original${media.backdrop_path}`}
@@ -767,7 +767,7 @@ export default function WatchDetails({
                 </button>
               </div>
             </div>
-            <div className="relative z-10 -mt-10 max-w-[1400px] mx-auto pb-8 [&>div]:!max-w-none [&>div>div]:!border-white/10 [&>div>div]:!bg-[#181818]/80 [&>div>div]:!shadow-[0_24px_80px_rgba(0,0,0,0.35)] [&>div>div]:!backdrop-blur-xl [&>div>div]:!rounded-2xl [&>div>div:first-child]:!p-5 md:[&>div>div:first-child]:!p-8 [&>div>div:first-child>div:first-child]:hidden [&_h1]:!text-2xl md:[&_h1]:!text-[28px] [&_h2]:!text-[22px] [&_p]:!leading-relaxed [&_.rounded-3xl]:!rounded-xl [&_.rounded-2xl]:!rounded-xl [&_.rounded-full]:!rounded-md [&_.grid>.rounded-xl]:!bg-black/20">
+            <div className="relative z-10">
               {children}
             </div>
           </section>

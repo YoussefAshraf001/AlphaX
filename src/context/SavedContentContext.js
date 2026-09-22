@@ -23,8 +23,10 @@ import {
 const SavedContentContext = createContext(null);
 const normalizeSavedStatus = (status) =>
   status === "Watched" ? "Finished" : status;
-const AUTO_EPISODE_STATUS_SYNC_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const AUTO_EPISODE_STATUS_SYNC_BATCH_SIZE = 2;
+// Keep saved-title metadata fresh without making a TMDB request on every render.
+// Snapshot updates naturally start another batch until every stale title is fresh.
+const AUTO_METADATA_SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const AUTO_METADATA_SYNC_BATCH_SIZE = 6;
 
 const getTimestampMillis = (value) => {
   if (!value) return 0;
@@ -110,8 +112,8 @@ export const SavedContentProvider = ({ children }) => {
   const [savedItems, setSavedItems] = useState([]);
   const [loadingSaved, setLoadingSaved] = useState(true);
   const activeProfileId = resolveProfileId(selectedProfile);
-  const autoStatusSyncInFlightRef = useRef({});
-  const autoStatusSyncAttemptedAtRef = useRef({});
+  const autoMetadataSyncInFlightRef = useRef({});
+  const autoMetadataSyncAttemptedAtRef = useRef({});
 
   useEffect(() => {
     if (!user?.email || profileLoading) {
@@ -283,97 +285,86 @@ export const SavedContentProvider = ({ children }) => {
 
     const now = Date.now();
     const candidates = savedItems
-      .filter((item) => item.mediaType === "tv" && item.status === "Finished")
       .filter((item) => {
-        const trackedEpisodes = Number(item.totalEpisodes || 0);
-        const watchedEpisodes = Number(item.watchedEpisodes || 0);
-        if (trackedEpisodes <= 0 || watchedEpisodes < trackedEpisodes) {
-          return false;
-        }
-
-        const syncKey = `tv-${item.id}`;
-        if (autoStatusSyncInFlightRef.current[syncKey]) return false;
+        const syncKey = `${activeProfileId}-${item.mediaType}-${item.id}`;
+        if (autoMetadataSyncInFlightRef.current[syncKey]) return false;
 
         const lastCheckedMs = Math.max(
-          getTimestampMillis(item.newEpisodeStatusCheckedAt),
-          Number(autoStatusSyncAttemptedAtRef.current[syncKey] || 0),
+          getTimestampMillis(item.metadataUpdatedAt),
+          Number(autoMetadataSyncAttemptedAtRef.current[syncKey] || 0),
         );
-        return now - lastCheckedMs >= AUTO_EPISODE_STATUS_SYNC_COOLDOWN_MS;
+        return now - lastCheckedMs >= AUTO_METADATA_SYNC_COOLDOWN_MS;
       })
-      .slice(0, AUTO_EPISODE_STATUS_SYNC_BATCH_SIZE);
+      .slice(0, AUTO_METADATA_SYNC_BATCH_SIZE);
 
     if (!candidates.length) return;
 
     candidates.forEach((item) => {
-      const syncKey = `tv-${item.id}`;
-      autoStatusSyncInFlightRef.current[syncKey] = true;
-      autoStatusSyncAttemptedAtRef.current[syncKey] = now;
+      const mediaType = item.mediaType === "tv" ? "tv" : "movie";
+      const collectionName = mediaType === "tv" ? "shows" : "movies";
+      const syncKey = `${activeProfileId}-${mediaType}-${item.id}`;
+      autoMetadataSyncInFlightRef.current[syncKey] = true;
+      autoMetadataSyncAttemptedAtRef.current[syncKey] = now;
 
       (async () => {
         try {
           const response = await fetch(
-            `https://api.themoviedb.org/3/tv/${item.id}?api_key=${apiKey}`,
+            `https://api.themoviedb.org/3/${mediaType}/${item.id}?api_key=${apiKey}&language=en-US`,
           );
-          if (!response.ok) throw new Error("Failed to fetch show metadata");
+          if (!response.ok) throw new Error("Failed to fetch title metadata");
           const data = await response.json();
-          const releasedEpisodeTotal = getReleasedEpisodeTotal(data);
-
-          const trackedEpisodes = Number(item.totalEpisodes || 0);
-          const watchedEpisodes = Number(item.watchedEpisodes || 0);
-          const hasNewReleasedEpisodes =
-            releasedEpisodeTotal > trackedEpisodes &&
-            watchedEpisodes >= trackedEpisodes;
-
-          const showRef = doc(
+          const itemRef = doc(
             db,
             ...profileSavedItemPath(
               user.email,
               activeProfileId,
-              "shows",
+              collectionName,
               item.id,
             ),
           );
 
-          if (hasNewReleasedEpisodes) {
-            await setDoc(
-              showRef,
-              {
-                status: "Watching",
-                totalEpisodes: releasedEpisodeTotal,
-                next_episode_to_air: data.next_episode_to_air ?? null,
-                last_episode_to_air: data.last_episode_to_air ?? null,
-                seasons: Array.isArray(data.seasons) ? data.seasons : [],
-                newEpisodeStatusCheckedAt: serverTimestamp(),
-                metadataUpdatedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              },
-              { merge: true },
-            );
+          const sharedMetadata = {
+            title: data.title || data.name || item.title || "",
+            poster: data.poster_path ?? item.poster ?? null,
+            backdrop: data.backdrop_path ?? item.backdrop ?? null,
+            overview: data.overview ?? item.overview ?? null,
+            rating: data.vote_average ?? item.rating ?? null,
+            releaseDate:
+              data.release_date || data.first_air_date || item.releaseDate || null,
+            metadataUpdatedAt: serverTimestamp(),
+          };
+
+          if (mediaType === "movie") {
+            await setDoc(itemRef, sharedMetadata, { merge: true });
             return;
           }
 
-          if (releasedEpisodeTotal > 0 && releasedEpisodeTotal !== trackedEpisodes) {
-            await setDoc(
-              showRef,
-              {
-                totalEpisodes: releasedEpisodeTotal,
-                next_episode_to_air: data.next_episode_to_air ?? null,
-                last_episode_to_air: data.last_episode_to_air ?? null,
-                seasons: Array.isArray(data.seasons) ? data.seasons : [],
-                newEpisodeStatusCheckedAt: serverTimestamp(),
-                metadataUpdatedAt: serverTimestamp(),
-              },
-              { merge: true },
-            );
-            return;
-          }
+          const releasedEpisodeTotal = getReleasedEpisodeTotal(data);
+          const trackedEpisodes = Number(item.totalEpisodes || 0);
+          const watchedEpisodes = Number(item.watchedEpisodes || 0);
+          const hasNewReleasedEpisodes =
+            releasedEpisodeTotal > trackedEpisodes &&
+            item.status === "Finished" &&
+            trackedEpisodes > 0 &&
+            watchedEpisodes >= trackedEpisodes;
 
           await setDoc(
-            showRef,
+            itemRef,
             {
+              ...sharedMetadata,
               next_episode_to_air: data.next_episode_to_air ?? null,
               last_episode_to_air: data.last_episode_to_air ?? null,
               seasons: Array.isArray(data.seasons) ? data.seasons : [],
+              totalSeasons:
+                Number(data.number_of_seasons) > 0
+                  ? Number(data.number_of_seasons)
+                  : item.totalSeasons || null,
+              ...(releasedEpisodeTotal > 0
+                ? { totalEpisodes: releasedEpisodeTotal }
+                : {}),
+              ...(hasNewReleasedEpisodes
+                ? { status: "Watching", updatedAt: serverTimestamp() }
+                : {}),
               newEpisodeStatusCheckedAt: serverTimestamp(),
             },
             { merge: true },
@@ -381,7 +372,7 @@ export const SavedContentProvider = ({ children }) => {
         } catch {
           // Silent by design; this runs as a background sync pass.
         } finally {
-          delete autoStatusSyncInFlightRef.current[syncKey];
+          delete autoMetadataSyncInFlightRef.current[syncKey];
         }
       })();
     });

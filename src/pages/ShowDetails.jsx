@@ -30,6 +30,7 @@ import { UserAuth } from "../context/AuthContext";
 import { useProfile } from "../context/ProfileContext";
 import { IoMdArrowBack, IoMdClose } from "react-icons/io";
 import PersonalRating from "../components/actions/PersonalRating";
+import CinematicDetails from "../components/content/CinematicDetails";
 import NotFoundPlaceholder from "../assets/notFound-Placeholder.jpg";
 import {
   profileLikedActorItemPath,
@@ -63,6 +64,7 @@ const ShowDetails = () => {
   const [cast, setCast] = useState([]);
   const [likedActors, setLikedActors] = useState(new Set());
   const [reviews, setReviews] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
   const [awards, setAwards] = useState([]);
   const [selectedBackdropIndex, setSelectedBackdropIndex] = useState(0);
   const [status, setStatus] = useState("");
@@ -123,7 +125,7 @@ const ShowDetails = () => {
       try {
         const [showRes, castRes, imagesRes, reviewsRes] = await Promise.all([
           axios.get(
-            `https://api.themoviedb.org/3/tv/${id}?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
+            `https://api.themoviedb.org/3/tv/${id}?api_key=${process.env.REACT_APP_TMDB_API_KEY}&append_to_response=content_ratings,keywords,recommendations`,
           ),
           axios.get(
             `https://api.themoviedb.org/3/tv/${id}/aggregate_credits?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
@@ -137,6 +139,7 @@ const ShowDetails = () => {
         ]);
 
         setShow(showRes.data);
+        setRecommendations(showRes.data.recommendations?.results || []);
         setCast(
           (castRes.data.cast || []).map((actor, index) => ({
             ...actor,
@@ -1206,30 +1209,29 @@ const ShowDetails = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
-        className="absolute inset-0 overflow-hidden"
+        className="hidden"
       >
         {show.backdrop_path ? (
           <img
             loading="lazy"
-            className={`w-full h-full object-cover scale-110 blur-xl transition-opacity duration-700 ${
+            className={`w-full h-full object-cover object-center transition-opacity duration-700 ${
               isBackdropReady ? "opacity-100" : "opacity-0"
             }`}
-            src={`https://image.tmdb.org/t/p/w500/${show.backdrop_path}`}
+            src={`https://image.tmdb.org/t/p/original/${show.backdrop_path}`}
             alt=""
           />
         ) : (
           <div className="w-full h-full bg-neutral-900" />
         )}
-        <div className="absolute inset-0 bg-black/25" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/80 to-[#090909]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.05),transparent_35%)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#090909] via-[#090909]/80 to-black/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#090909] via-transparent to-black/45" />
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="relative z-10 px-4 md:px-8 pt-24 pb-12"
+        className="relative z-10 pt-16 pb-12"
       >
         <WatchDetails
           key={`${id}:${user?.email || "guest"}:${activeProfileId}`}
@@ -1238,8 +1240,23 @@ const ShowDetails = () => {
           email={user?.email}
           profileId={activeProfileId}
         >
-          <div className="max-w-6xl mx-auto space-y-6">
-            <div className="rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-5 md:p-8 shadow-2xl">
+          <CinematicDetails
+            media={show}
+            type="tv"
+            cast={cast}
+            backdrops={backdrops}
+            reviews={reviews}
+            recommendations={recommendations}
+            status={status}
+            favourite={favourite}
+            onFavourite={toggleFavourite}
+            onStatus={saveWithStatus}
+            onTrailer={handleWatchLaterClick}
+            trailerUrl={trailerUrl}
+            onCloseTrailer={handleClose}
+          />
+          <div className="hidden">
+            <div className="min-h-[610px] flex flex-col justify-center py-8 md:py-14">
               <div className="mb-4">
                 <button
                   onClick={() => {
@@ -1254,7 +1271,7 @@ const ShowDetails = () => {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-                <div className="lg:col-span-3 min-w-0 max-md:max-w-[180px] [&_img]:!h-auto [&_img]:max-h-[390px] [&_img]:!rounded-lg [&_img]:!shadow-none">
+                <div className="hidden">
                   <div className="relative w-full max-w-[320px] mx-auto">
                     {show.poster_path ? (
                       <motion.img
@@ -1296,10 +1313,10 @@ const ShowDetails = () => {
                   </div>
                 </div>
 
-                <div className="lg:col-span-9 min-w-0 flex flex-col gap-5 [&>div:first-child>div:first-child]:flex-wrap [&>div:first-child>div:first-child]:gap-4">
+                <div className="lg:col-span-6 min-w-0 flex flex-col gap-5 [&>div:first-child>div:first-child]:flex-wrap [&>div:first-child>div:first-child]:gap-4">
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
-                      <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-tight">
+                      <h1 className="text-4xl md:text-6xl font-black tracking-[-0.035em] leading-none drop-shadow-2xl">
                         {show.name}
                       </h1>
                       {status && (
@@ -1381,17 +1398,37 @@ const ShowDetails = () => {
                       </span>
                     </div>
 
-                    <div className="pt-1">
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
                       <button
                         onClick={handleWatchLaterClick}
-                        className="rounded-xl border text-white font-semibold border-gray-300 hover:bg-gray-300 hover:text-black hover:-translate-y-1 transform ease-in-out duration-300 py-2 px-5"
+                        className="rounded-lg bg-white px-5 py-2.5 text-sm font-bold text-black transition hover:bg-white/85"
                       >
                         Watch Trailer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={toggleFavourite}
+                        disabled={isUnreleased}
+                        className={`grid h-10 w-10 place-items-center rounded-full border transition ${
+                          favourite
+                            ? "border-red-400/60 bg-red-600 text-white"
+                            : "border-white/30 bg-black/30 text-white hover:bg-white/10"
+                        } disabled:cursor-not-allowed disabled:opacity-45`}
+                        aria-label={
+                          favourite ? "Remove favourite" : "Add favourite"
+                        }
+                        title={favourite ? "Remove favourite" : "Add favourite"}
+                      >
+                        {favourite ? (
+                          <FaHeart size={15} />
+                        ) : (
+                          <FaRegHeart size={15} />
+                        )}
                       </button>
                     </div>
                   </div>
 
-                  <p className="text-neutral-300 leading-relaxed text-sm md:text-base max-w-3xl">
+                  <p className="text-white/85 leading-relaxed text-sm md:text-[15px] max-w-2xl drop-shadow-lg">
                     {show.overview}
                   </p>
 
@@ -1678,7 +1715,7 @@ const ShowDetails = () => {
             </AnimatePresence>
 
             <div
-              className={`rounded-3xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 md:p-6 max-h-[760px] flex flex-col overflow-hidden ${
+              className={`border-t border-white/10 bg-[#090909]/90 p-4 md:p-6 max-h-[760px] flex flex-col overflow-hidden ${
                 activeTab === "review"
                   ? "h-[35vh] min-h-[30vh] md:h-[30vh] md:min-h-[30vh]"
                   : "h-auto min-h-[340px] md:h-[30vh] md:min-h-[30vh]"

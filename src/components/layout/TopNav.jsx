@@ -18,6 +18,7 @@ import {
   FiSettings,
   FiLogOut,
   FiArrowRight,
+  FiBell,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -279,23 +280,23 @@ const TopNav = () => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 w-full z-[1000] bg-black/80 backdrop-blur">
-        <div className="h-20 px-6 lg:px-10 flex items-center justify-between">
+      <header className="fixed top-0 left-0 w-full z-[1000] border-b border-white/10 bg-[#08090b]/85 shadow-[0_8px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl">
+        <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-6">
           {/* LEFT */}
-          <div className="flex items-center gap-8">
-            <Link to="/" className="text-red-600 font-bold text-2xl">
+          <div className="flex shrink-0 items-center gap-8">
+            <Link to="/" className="app-logo-font text-[#f0182d] text-[30px] leading-none">
               SCENEARIX
             </Link>
 
             {/* NAV (md+) */}
             {user && (
-              <nav className="hidden lg:flex items-center gap-6 text-sm text-neutral-300">
+              <nav className="hidden lg:flex items-center gap-7 text-[13px] text-white/75">
                 <Link
                   to="/for-you"
-                  className={`px-3 py-1 rounded-full border transition ${
+                  className={`transition ${
                     location.pathname === "/for-you"
-                      ? "border-red-500 bg-red-500 text-white shadow-[0_0_18px_rgba(239,68,68,0.3)]"
-                      : "border-red-500/50 bg-transparent text-neutral-200 hover:text-white hover:border-red-500/90"
+                      ? "font-semibold text-white"
+                      : "hover:text-white"
                   }`}
                 >
                   For You
@@ -315,16 +316,14 @@ const TopNav = () => {
                 <Link to="/about" className="hover:text-white">
                   About
                 </Link>
-                <Link to="/help" className="hover:text-white">
-                  Help
-                </Link>
               </nav>
             )}
           </div>
 
           {/* CENTER SEARCH (lg+) */}
           {user && (
-            <div className="relative hidden xl:flex items-center">
+            <div className="relative hidden xl:flex flex-1 max-w-[420px] items-center ml-auto">
+              <FiSearch className="pointer-events-none absolute left-4 z-10 text-white/80" size={17} />
               <input
                 type="text"
                 value={searchQuery}
@@ -340,7 +339,7 @@ const TopNav = () => {
                   }
                 }}
                 placeholder="Search movies, series, people"
-                className="bg-neutral-800 text-sm text-white placeholder-neutral-400 rounded-full px-4 py-2 pr-16 w-[320px] focus:outline-none"
+                className="h-10 w-full rounded-full border border-white/15 bg-white/[0.035] pl-11 pr-16 text-[13px] text-white placeholder-white/45 outline-none transition focus:border-white/30 focus:bg-white/[0.06]"
               />
 
               {searchQuery.trim() && (
@@ -501,9 +500,12 @@ const TopNav = () => {
           )}
 
           {/* RIGHT (md+) */}
-          <div className="hidden lg:flex items-center gap-6 text-sm text-neutral-300 relative">
+          <div className="hidden lg:flex items-center gap-4 text-sm text-neutral-300 relative">
             {user ? (
               <>
+                <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Notifications">
+                  <FiBell size={17} />
+                </button>
                 <motion.button
                   ref={accountButtonRef}
                   onClick={() => setAccountOpen((v) => !v)}
@@ -511,14 +513,14 @@ const TopNav = () => {
                   whileTap={{ scale: 0.97 }}
                   className="
                     flex items-center gap-2
-                    px-4 py-2
+                    px-2.5 py-1.5 pr-4
                     rounded-full
-                    bg-black/65
+                    bg-white/[0.035]
                     border border-white/20
                     text-sm text-white/90
                     shadow-[0_8px_24px_rgba(0,0,0,0.35)]
                     hover:text-white
-                    hover:bg-black/75
+                    hover:bg-white/[0.08]
                     transition
                   "
                 >
