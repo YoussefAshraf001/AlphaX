@@ -18,7 +18,6 @@ import {
   FiSettings,
   FiLogOut,
   FiArrowRight,
-  FiBell,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -280,12 +279,17 @@ const TopNav = () => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 w-full z-[1000] border-b border-white/10 bg-[#08090b]/85 shadow-[0_8px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl">
-        <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-6">
+      <header data-scenearix-desktop-navbar className="scenearix-navbar fixed top-0 left-0 w-full z-[1000] border-b border-white/10 bg-[#08090b]/85 shadow-[0_8px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl">
+        <div className="h-16 px-4 sm:px-6 lg:px-6 flex items-center justify-between gap-5 xl:gap-7">
           {/* LEFT */}
-          <div className="flex shrink-0 items-center gap-8">
-            <Link to="/" className="app-logo-font text-[#f0182d] text-[30px] leading-none">
-              SCENEARIX
+          <div className="flex shrink-0 items-center gap-7 xl:gap-9">
+            <Link to="/" className="flex items-center gap-2 app-logo-font text-[#f0182d] text-[30px] leading-none">
+              <img
+                src="/scenearix-logo.png"
+                alt=""
+                className="h-10 w-10 object-contain"
+              />
+              <span>SCENEARIX</span>
             </Link>
 
             {/* NAV (md+) */}
@@ -322,7 +326,7 @@ const TopNav = () => {
 
           {/* CENTER SEARCH (lg+) */}
           {user && (
-            <div className="relative hidden xl:flex flex-1 max-w-[420px] items-center ml-auto">
+            <div className="relative hidden xl:flex flex-1 max-w-[520px] items-center ml-auto">
               <FiSearch className="pointer-events-none absolute left-4 z-10 text-white/80" size={17} />
               <input
                 type="text"
@@ -339,7 +343,7 @@ const TopNav = () => {
                   }
                 }}
                 placeholder="Search movies, series, people"
-                className="h-10 w-full rounded-full border border-white/15 bg-white/[0.035] pl-11 pr-16 text-[13px] text-white placeholder-white/45 outline-none transition focus:border-white/30 focus:bg-white/[0.06]"
+                className="h-12 w-full rounded-full border border-white/45 bg-black/20 pl-12 pr-16 text-[14px] text-white placeholder-white/55 outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition focus:border-white/70 focus:bg-white/[0.04]"
               />
 
               {searchQuery.trim() && (
@@ -500,12 +504,9 @@ const TopNav = () => {
           )}
 
           {/* RIGHT (md+) */}
-          <div className="hidden lg:flex items-center gap-4 text-sm text-neutral-300 relative">
+          <div className="hidden lg:flex items-center gap-4 text-sm text-neutral-300 relative shrink-0">
             {user ? (
               <>
-                <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Notifications">
-                  <FiBell size={17} />
-                </button>
                 <motion.button
                   ref={accountButtonRef}
                   onClick={() => setAccountOpen((v) => !v)}
@@ -513,7 +514,7 @@ const TopNav = () => {
                   whileTap={{ scale: 0.97 }}
                   className="
                     flex items-center gap-2
-                    px-2.5 py-1.5 pr-4
+                    min-h-12 px-2 py-1.5 pr-4
                     rounded-full
                     bg-white/[0.035]
                     border border-white/20

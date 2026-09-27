@@ -104,6 +104,18 @@ Build for production:
 npm run build
 ```
 
+## Windows Desktop App
+
+SceneariX includes an optimized Electron desktop edition. It bundles the production web build, keeps sessions persistent, supports tray/background behavior, and produces a normal Windows installer.
+
+```bash
+npm run desktop:install
+npm run desktop:test
+npm run desktop:dist
+```
+
+See [`desktop/README.md`](desktop/README.md) for packaging and security details.
+
 ## Notes
 
 - Data is profile-aware; each selected profile keeps separate watchlist, favourites, and ratings.

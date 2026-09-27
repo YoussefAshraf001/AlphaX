@@ -141,7 +141,9 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
     };
   }, [user?.email, loading, mediaFilter, activeProfileId, profileLoading, scope, retry]);
 
-  const slideLeft = () => {
+  const slideLeft = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     sliderRef.current?.scrollBy({ left: -620, behavior: "smooth" });
   };
 
@@ -188,7 +190,9 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
     }
   };
 
-  const slideRight = () => {
+  const slideRight = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     sliderRef.current?.scrollBy({ left: 620, behavior: "smooth" });
   };
 
@@ -223,7 +227,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
           <button
             onClick={slideLeft}
             disabled={!canScrollLeft}
-            className="hidden md:flex absolute left-7 top-1/2 -translate-y-1/2 z-20 w-10 h-10 items-center justify-center rounded-full bg-black/70 border border-white/20 text-white/85 opacity-0 group-hover:opacity-100 transition hover:bg-black/90 disabled:opacity-0 disabled:pointer-events-none"
+            className="hidden md:flex absolute left-7 top-1/2 -translate-y-1/2 z-40 w-10 h-10 items-center justify-center rounded-full bg-black/70 border border-white/20 text-white/85 opacity-0 group-hover:opacity-100 transition hover:bg-black/90 disabled:opacity-0 disabled:pointer-events-none"
             aria-label="Scroll left"
           >
             <MdChevronLeft size={24} />
@@ -231,7 +235,7 @@ const ContinueWatchingRow = ({ mediaFilter = "all" }) => {
           <button
             onClick={slideRight}
             disabled={!canScrollRight}
-            className="hidden md:flex absolute right-7 top-1/2 -translate-y-1/2 z-20 w-10 h-10 items-center justify-center rounded-full bg-black/70 border border-white/20 text-white/85 opacity-0 group-hover:opacity-100 transition hover:bg-black/90 disabled:opacity-0 disabled:pointer-events-none"
+            className="hidden md:flex absolute right-7 top-1/2 -translate-y-1/2 z-40 w-10 h-10 items-center justify-center rounded-full bg-black/70 border border-white/20 text-white/85 opacity-0 group-hover:opacity-100 transition hover:bg-black/90 disabled:opacity-0 disabled:pointer-events-none"
             aria-label="Scroll right"
           >
             <MdChevronRight size={24} />

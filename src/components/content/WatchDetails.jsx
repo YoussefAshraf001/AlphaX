@@ -6,6 +6,29 @@ import { motion, useReducedMotion } from "framer-motion";
 import usePlaybackProgress from "./usePlaybackProgress";
 import { normalizePlayerEvent } from "../../utils/playbackProgress";
 
+const volumeKey = (email, profileId) =>
+  `scenearix:player-volume:${encodeURIComponent(email || "guest")}:${encodeURIComponent(profileId || "main")}`;
+
+function readPlayerVolume(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    if (!Number.isFinite(value?.volume) || value.volume < 0 || value.volume > 1)
+      return null;
+    return { volume: value.volume, muted: value.muted === true };
+  } catch {
+    return null;
+  }
+}
+
+function writePlayerVolume(key, volume, muted) {
+  if (!Number.isFinite(volume) || volume < 0 || volume > 1) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ volume, muted: muted === true }));
+  } catch {
+    /* Playback remains available if local storage is disabled. */
+  }
+}
+
 export default function WatchDetails({
   media,
   type,
@@ -45,7 +68,9 @@ export default function WatchDetails({
   const restored = useRef(false);
   const advanced = useRef(false);
   const frame = useRef(null);
+  const volumeRestoreTimers = useRef([]);
   const positions = useRef({});
+  const playerVolumeKey = volumeKey(email, profileId);
   const route =
     type === "tv"
       ? `/tv/${media.id}/${season}/${episode}`
@@ -187,6 +212,17 @@ export default function WatchDetails({
       )
         return;
       try {
+        const envelope =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        const playerData =
+          envelope?.type === "PLAYER_EVENT" ? envelope.data : envelope;
+        if (playerData?.event === "volumechange") {
+          writePlayerVolume(
+            playerVolumeKey,
+            Number(playerData.volume),
+            playerData.muted,
+          );
+        }
         const data = normalizePlayerEvent(event.data, {
           id: media.id,
           type,
@@ -212,7 +248,39 @@ export default function WatchDetails({
     }
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [route, record, season, episode, type, media.id]);
+  }, [route, record, season, episode, type, media.id, playerVolumeKey]);
+
+  const restorePlayerVolume = useCallback(() => {
+    volumeRestoreTimers.current.forEach(clearTimeout);
+    volumeRestoreTimers.current = [];
+    const preference = readPlayerVolume(playerVolumeKey);
+    if (!preference || !frame.current?.contentWindow) return;
+    const send = () => {
+      const target = frame.current?.contentWindow;
+      if (!target) return;
+      for (const origin of ["https://www.vidy.st", "https://vidy.st"]) {
+        target.postMessage(
+          JSON.stringify({ command: "volume", level: preference.volume }),
+          origin,
+        );
+        target.postMessage(
+          JSON.stringify({ command: "mute", muted: preference.muted }),
+          origin,
+        );
+      }
+    };
+    send();
+    // Some player sources attach their command listener shortly after the
+    // iframe load event, so retry briefly with the same idempotent setting.
+    volumeRestoreTimers.current = [250, 1000].map((delay) =>
+      setTimeout(send, delay),
+    );
+  }, [playerVolumeKey]);
+
+  useEffect(
+    () => () => volumeRestoreTimers.current.forEach(clearTimeout),
+    [],
+  );
 
   useEffect(() => {
     if (!started || loaded || tab !== "watch") return;
@@ -378,6 +446,7 @@ export default function WatchDetails({
                     onLoad={() => {
                       setLoaded(true);
                       setFailed(false);
+                      restorePlayerVolume();
                     }}
                     onError={() => setFailed(true)}
                   />

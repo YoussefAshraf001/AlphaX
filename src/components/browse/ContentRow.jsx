@@ -271,11 +271,15 @@ const ContentRow = ({
 
   if (!mergedItems.length) return null;
 
-  const slideLeft = () => {
+  const slideLeft = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     sliderRef.current?.scrollBy({ left: -600, behavior: "smooth" });
   };
 
-  const slideRight = () => {
+  const slideRight = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     sliderRef.current?.scrollBy({ left: 600, behavior: "smooth" });
   };
 
@@ -465,16 +469,19 @@ const ContentRow = ({
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6 }}
       >
-        <MdChevronLeft
-          onMouseDown={(e) => e.preventDefault()}
+        <button
+          type="button"
           onClick={slideLeft}
-          size={42}
+          aria-label={`Scroll ${title} left`}
           className="
-            absolute left-0 top-1/2 -translate-y-1/2 z-10
+            absolute left-0 top-1/2 -translate-y-1/2 z-40
+            grid h-[42px] w-[42px] place-items-center
             bg-black/60 hover:bg-black/80 rounded-full cursor-pointer
             opacity-80 hover:opacity-100 transition
           "
-        />
+        >
+          <MdChevronLeft size={42} aria-hidden="true" />
+        </button>
 
         <div
           ref={sliderRef}
@@ -500,16 +507,19 @@ const ContentRow = ({
           ))}
         </div>
 
-        <MdChevronRight
-          onMouseDown={(e) => e.preventDefault()}
+        <button
+          type="button"
           onClick={slideRight}
-          size={42}
+          aria-label={`Scroll ${title} right`}
           className="
-            absolute right-0 top-1/2 -translate-y-1/2 z-10
+            absolute right-0 top-1/2 -translate-y-1/2 z-40
+            grid h-[42px] w-[42px] place-items-center
             bg-black/60 hover:bg-black/80 rounded-full cursor-pointer
             opacity-80 hover:opacity-100 transition
           "
-        />
+        >
+          <MdChevronRight size={42} aria-hidden="true" />
+        </button>
       </motion.div>
 
       {pendingRemove && (

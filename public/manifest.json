@@ -3,9 +3,10 @@
   "name": "AlphaX",
   "icons": [
     {
-      "src": "alphax-logo.svg",
-      "type": "image/svg+xml",
-      "sizes": "64x64"
+      "src": "scenearix-logo.png",
+      "type": "image/png",
+      "sizes": "1024x1024",
+      "purpose": "any"
     }
   ],
   "start_url": ".",

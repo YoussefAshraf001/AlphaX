@@ -1,0 +1,18 @@
+#scenearix-desktop-drag{position:fixed;z-index:2147483646;top:0;left:0;right:138px;height:7px;-webkit-app-region:drag}
+[data-scenearix-desktop-navbar]>div:first-child{padding-right:158px!important}
+#scenearix-desktop-controls{position:absolute;z-index:2147483647;top:15px;right:8px;display:flex;height:34px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(14px);-webkit-app-region:no-drag}
+#scenearix-desktop-controls[data-location="fallback"]{position:fixed;top:0;right:0;border-radius:0 0 0 10px}
+#scenearix-desktop-controls button{width:46px;height:34px;display:grid;place-items:center;border:0;color:#ddd;background:transparent;cursor:pointer}
+#scenearix-desktop-controls button:hover{background:rgba(255,255,255,.12);color:#fff}
+#scenearix-desktop-controls button:last-child:hover{background:#e50914}
+#scenearix-desktop-controls svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.4}
+@media(max-width:1023px){[data-scenearix-desktop-navbar]>div:first-child{padding-right:142px!important}#scenearix-desktop-controls{right:8px}#scenearix-desktop-controls button{width:42px}}
+@media(min-width:1536px){
+  [data-scenearix-desktop-navbar]>div:first-child{padding-right:238px!important}
+  #scenearix-desktop-controls{top:21px;right:18px;height:56px;border-radius:28px;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.18);overflow:visible}
+  #scenearix-desktop-controls:before{content:"";position:absolute;left:-17px;top:-1px;width:1px;height:56px;background:rgba(255,255,255,.15)}
+  #scenearix-desktop-controls button{width:66px;height:54px}
+  #scenearix-desktop-controls button:first-child{border-radius:27px 0 0 27px}
+  #scenearix-desktop-controls button:last-child{border-radius:50%;background:#bb001d;margin-left:2px;box-shadow:0 0 26px rgba(229,9,20,.28)}
+  #scenearix-desktop-controls button:last-child:hover{background:#e50914}
+}

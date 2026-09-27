@@ -198,3 +198,24 @@ dialog {
     transform: rotate(360deg);
   }
 }
+@media (min-width: 1536px) {
+  .scenearix-navbar {
+    top: 18px;
+    left: 7px;
+    width: calc(100% - 14px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    background:
+      radial-gradient(circle at 100% 50%, rgba(185, 0, 27, 0.78), transparent 28%),
+      radial-gradient(circle at 3% 50%, rgba(91, 7, 21, 0.38), transparent 23%),
+      linear-gradient(100deg, rgba(17, 18, 20, 0.98), rgba(6, 7, 9, 0.98));
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(20px);
+  }
+
+  .scenearix-navbar > div:first-child {
+    height: 98px;
+  }
+}

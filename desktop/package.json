@@ -1,0 +1,53 @@
+{
+  "name": "scenearix-desktop",
+  "productName": "SceneariX",
+  "version": "0.1.1",
+  "description": "SceneariX for Windows",
+  "author": "SceneariX",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-isolation=none test/*.test.cjs",
+    "pack": "electron-builder --win --x64 --dir --publish never",
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "app.scenearix.desktop",
+    "productName": "SceneariX",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/icon.ico",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "../build", "to": "web" }
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico",
+      "artifactName": "SceneariX-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SceneariX",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

@@ -135,7 +135,8 @@ const About = () => {
                 />
               </motion.div>
               <div>
-                <h2 className="text-lg font-semibold">Developer & Designer</h2>
+                <h2 className="text-lg font-semibold">Youssef Ashraf</h2>
+                {/* <p className="text-sm text-white/80">Developer & Designer</p> */}
                 <p className="text-xs text-white/60">Creator of SceneariX</p>
               </div>
             </div>
